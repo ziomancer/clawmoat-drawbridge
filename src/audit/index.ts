@@ -113,9 +113,9 @@ export class AuditEmitter {
     profile?: string;
   }): ScanAuditEvent | null {
     const event: ScanAuditEvent = {
+      ...params,
       event: params.safe ? "scan_pass" : "scan_block",
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
@@ -140,9 +140,9 @@ export class AuditEmitter {
     // Strip hasFlags from spread — not part of SyntacticAuditEvent
     const { hasFlags: _, ...rest } = params;
     const event: SyntacticAuditEvent = {
+      ...rest,
       event: eventType,
       timestamp: new Date().toISOString(),
-      ...rest,
     };
     return this.emit(event) ? event : null;
   }
@@ -159,10 +159,10 @@ export class AuditEmitter {
     profile?: string;
   }): FrequencyAuditEvent | null {
     const event: FrequencyAuditEvent = {
+      ...params,
       event:
         `frequency_escalation_${params.tier}` as FrequencyAuditEvent["event"],
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
@@ -178,9 +178,9 @@ export class AuditEmitter {
     profile?: string;
   }): SanitizeAuditEvent | null {
     const event: SanitizeAuditEvent = {
+      ...params,
       event: "content_sanitized",
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
@@ -195,9 +195,9 @@ export class AuditEmitter {
     agentId?: string;
   }): ProfileAuditEvent | null {
     const event: ProfileAuditEvent = {
+      ...params,
       event: "profile_loaded",
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
@@ -214,9 +214,9 @@ export class AuditEmitter {
     profile?: string;
   }): FlagsSummaryEvent | null {
     const event: FlagsSummaryEvent = {
+      ...params,
       event: "flags_summary",
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
@@ -266,9 +266,9 @@ export class AuditEmitter {
     profile?: string;
   }): OutputDiffEvent | null {
     const event: OutputDiffEvent = {
+      ...params,
       event: "output_diff",
       timestamp: new Date().toISOString(),
-      ...params,
     };
     return this.emit(event) ? event : null;
   }
