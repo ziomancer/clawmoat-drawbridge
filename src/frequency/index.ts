@@ -158,6 +158,7 @@ export class FrequencyTracker {
     };
   }
 
+  /** Returns a snapshot of the session's suspicion state, or null if unknown. */
   getState(sessionId: string): SessionSuspicionState | null {
     const state = this.sessions.get(sessionId);
     return state ? { ...state } : null;

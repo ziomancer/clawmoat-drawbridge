@@ -7,7 +7,7 @@
  * Returns a JSON.stringify replacer that replaces circular references
  * with "[Circular]" and caps depth at maxDepth with "[Depth limit]".
  */
-function circularReplacer(maxDepth = 10) {
+function circularReplacer(maxDepth: number) {
   const seen = new WeakSet();
   const depths = new WeakMap<object, number>();
 
@@ -31,10 +31,17 @@ function circularReplacer(maxDepth = 10) {
   };
 }
 
-/** Safely stringify any value, handling circular references and depth limits. Never throws. */
-export function safeStringify(content: unknown): string {
+/**
+ * Safely stringify any value, handling circular references and depth limits.
+ * Never throws.
+ *
+ * Depth is capped at `maxDepth` (default 32). Objects deeper than this will
+ * have interior nodes replaced with "[Depth limit]". This applies to all
+ * inputs — prior to v1.0, depth limiting only triggered on circular references.
+ */
+export function safeStringify(content: unknown, maxDepth = 32): string {
   try {
-    return JSON.stringify(content, circularReplacer(), 0);
+    return JSON.stringify(content, circularReplacer(maxDepth), 0);
   } catch {
     // JSON.stringify can throw on BigInt values or bad toJSON methods.
     // Return a JSON-safe diagnostic rather than "[object Object]".

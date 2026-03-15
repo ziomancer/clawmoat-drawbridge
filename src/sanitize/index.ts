@@ -78,9 +78,10 @@ export function sanitizeContent(
       // Position is bad (wrong, negative, out-of-bounds). For a content-filtering
       // library, failing to redact is worse than over-redacting, so redact ALL
       // occurrences of the matched string.
-      const MAX_FALLBACK_RANGES = 1_000;
+      const MAX_FALLBACK_PER_FINDING = 1_000;
+      let fallbackCount = 0;
       let searchFrom = 0;
-      while (searchFrom < content.length && ranges.length < MAX_FALLBACK_RANGES) {
+      while (searchFrom < content.length && fallbackCount < MAX_FALLBACK_PER_FINDING) {
         const idx = content.indexOf(matched, searchFrom);
         if (idx === -1) break;
         ranges.push({
@@ -90,6 +91,7 @@ export function sanitizeContent(
           severityRank: severityRank(finding.source.severity),
         });
         searchFrom = idx + matched.length;
+        fallbackCount++;
       }
     }
   }

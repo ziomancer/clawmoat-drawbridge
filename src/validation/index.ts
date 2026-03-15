@@ -127,9 +127,15 @@ export class PreFilter {
   constructor(config?: Partial<SyntacticFilterConfig>) {
     this.config = { ...DEFAULT_SYNTACTIC_CONFIG, ...config };
 
+    const MAX_ALLOWED_DEPTH = 1_000; // 2x cap in measureJsonDepth → max ~2k frames, well within stack
     if (!Number.isFinite(this.config.maxJsonDepth) || this.config.maxJsonDepth <= 0) {
       throw new Error(
         `PreFilter: maxJsonDepth must be a positive finite number. Got ${this.config.maxJsonDepth}`,
+      );
+    }
+    if (this.config.maxJsonDepth > MAX_ALLOWED_DEPTH) {
+      throw new Error(
+        `PreFilter: maxJsonDepth ${this.config.maxJsonDepth} exceeds maximum allowed value ${MAX_ALLOWED_DEPTH}`,
       );
     }
     if (!Number.isFinite(this.config.maxPayloadBytes) || this.config.maxPayloadBytes <= 0) {
