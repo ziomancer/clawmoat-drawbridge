@@ -69,6 +69,9 @@ export class DrawbridgePipeline {
   /** Tracks last emitted escalation tier per session (for transition-only emission) */
   private readonly lastEmittedTier: Map<string, EscalationTier> = new Map();
 
+  /** Max entries in lastEmittedTier before LRU eviction (matches frequency tracker scale) */
+  private static readonly MAX_TIER_CACHE_SIZE = 10_000;
+
   /** Tier1 threshold from frequency config (stored at construction since tracker.config is private) */
   private readonly tier1Threshold: number;
 
@@ -430,17 +433,23 @@ export class DrawbridgePipeline {
   // Public API: module access
   // ---------------------------------------------------------------------------
 
-  /** Access the underlying scanner */
+  /**
+   * Access the underlying scanner.
+   *
+   * **Caveat (v1.0):** Returns a mutable reference to the live instance.
+   * Modifications affect pipeline behavior. Treat as read-only unless you
+   * understand the implications. v1.1 may freeze or proxy these accessors.
+   */
   get scannerModule(): DrawbridgeScanner {
     return this.scanner;
   }
 
-  /** Access the underlying frequency tracker */
+  /** Access the underlying frequency tracker. See scannerModule caveat re: mutability. */
   get frequencyModule(): FrequencyTracker {
     return this.tracker;
   }
 
-  /** Access the underlying pre-filter */
+  /** Access the underlying pre-filter. See scannerModule caveat re: mutability. */
   get preFilterModule(): PreFilter {
     return this.preFilter;
   }
@@ -450,12 +459,12 @@ export class DrawbridgePipeline {
     return this.profile.profile;
   }
 
-  /** Access the audit emitter */
+  /** Access the audit emitter. See scannerModule caveat re: mutability. */
   get auditModule(): AuditEmitter {
     return this.auditor;
   }
 
-  /** Access the alert manager */
+  /** Access the alert manager. See scannerModule caveat re: mutability. */
   get alertModule(): AlertManager {
     return this.alerter;
   }
@@ -616,9 +625,25 @@ export class DrawbridgePipeline {
       tier3: 3,
     };
 
-    if (tierRank[result.tier] <= tierRank[lastTier]) return;
+    // LRU refresh: delete-and-re-set moves the key to the end of insertion order,
+    // so eviction always removes the least-recently-accessed session.
+    if (this.lastEmittedTier.has(sessionId)) {
+      this.lastEmittedTier.delete(sessionId);
+    }
+
+    if (tierRank[result.tier] <= tierRank[lastTier]) {
+      // No escalation — restore the existing tier at the refreshed position.
+      this.lastEmittedTier.set(sessionId, lastTier);
+      return;
+    }
 
     this.lastEmittedTier.set(sessionId, result.tier);
+
+    // LRU eviction when cache exceeds bound — removes least-recently-accessed
+    if (this.lastEmittedTier.size > DrawbridgePipeline.MAX_TIER_CACHE_SIZE) {
+      const lru = this.lastEmittedTier.keys().next().value;
+      if (lru !== undefined) this.lastEmittedTier.delete(lru);
+    }
 
     this.routeEvent(
       this.auditor.emitFrequency({

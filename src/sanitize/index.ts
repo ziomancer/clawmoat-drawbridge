@@ -65,21 +65,35 @@ export function sanitizeContent(
     const matched = finding.source.matched;
     if (!matched) continue;
 
-    let start: number;
-    if (finding.source.position >= 0 && finding.source.position < content.length) {
-      start = finding.source.position;
+    if (finding.source.position >= 0 && finding.source.position < content.length &&
+        content.slice(finding.source.position, finding.source.position + matched.length) === matched) {
+      // Verified position — redact exactly this occurrence.
+      ranges.push({
+        start: finding.source.position,
+        end: Math.min(finding.source.position + matched.length, content.length),
+        ruleId: finding.ruleId,
+        severityRank: severityRank(finding.source.severity),
+      });
     } else {
-      // Fallback: find first occurrence in content (handles negative and out-of-bounds)
-      start = content.indexOf(matched);
-      if (start === -1) continue;
+      // Position is bad (wrong, negative, out-of-bounds). For a content-filtering
+      // library, failing to redact is worse than over-redacting, so redact ALL
+      // occurrences of the matched string.
+      const MAX_FALLBACK_PER_FINDING = 1_000;
+      let fallbackCount = 0;
+      let searchFrom = 0;
+      while (searchFrom < content.length && fallbackCount < MAX_FALLBACK_PER_FINDING) {
+        const idx = content.indexOf(matched, searchFrom);
+        if (idx === -1) break;
+        ranges.push({
+          start: idx,
+          end: Math.min(idx + matched.length, content.length),
+          ruleId: finding.ruleId,
+          severityRank: severityRank(finding.source.severity),
+        });
+        searchFrom = idx + matched.length;
+        fallbackCount++;
+      }
     }
-
-    ranges.push({
-      start,
-      end: start + matched.length,
-      ruleId: finding.ruleId,
-      severityRank: severityRank(finding.source.severity),
-    });
   }
 
   if (ranges.length === 0) {

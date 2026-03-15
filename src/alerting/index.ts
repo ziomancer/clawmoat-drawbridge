@@ -45,8 +45,9 @@ export class AlertManager {
   private rule4Count = 0;
   private rule4WindowStart: number = Date.now();
 
-  // Per-session recent event buffer
+  // Per-session recent event buffer (FIFO eviction at MAX_SESSION_EVENT_ENTRIES)
   private readonly sessionEvents: Map<string, TypedAuditEvent[]>;
+  private static readonly MAX_SESSION_EVENT_ENTRIES = 10_000;
 
   // Stats
   private alertCount = 0;
@@ -292,9 +293,17 @@ export class AlertManager {
       entries.splice(0, entries.length - 1000);
     }
 
-    // Per-session recent events
+    // Per-session recent events (bounded to MAX_SESSION_EVENT_ENTRIES sessions).
+    // When the session cap is reached, the least-recently-added session and ALL
+    // of its buffered events are evicted. This is intentional — partial eviction
+    // would leave stale context in alert payloads. Individual session buffers are
+    // separately bounded by recentContextMax (shift on overflow, lines below).
     if (!this.sessionEvents.has(event.sessionId)) {
       this.sessionEvents.set(event.sessionId, []);
+      if (this.sessionEvents.size > AlertManager.MAX_SESSION_EVENT_ENTRIES) {
+        const oldest = this.sessionEvents.keys().next().value;
+        if (oldest !== undefined) this.sessionEvents.delete(oldest);
+      }
     }
     const sessionBuf = this.sessionEvents.get(event.sessionId)!;
     sessionBuf.push(event);

@@ -97,16 +97,21 @@ function contentHasHomoglyphs(text: string): boolean {
 // JSON depth measurement
 // ---------------------------------------------------------------------------
 
-function measureJsonDepth(value: unknown, current = 0): number {
+function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
   if (typeof value !== "object" || value === null) return current;
+  // Hard safety cap at 2x limit — still short-circuits deep bombs but reports
+  // a more informative depth than just limit+1 for diagnostics/triage.
+  if (current + 1 > limit * 2) return current + 1;
   let max = current + 1;
   if (Array.isArray(value)) {
     for (const item of value) {
-      max = Math.max(max, measureJsonDepth(item, current + 1));
+      max = Math.max(max, measureJsonDepth(item, current + 1, limit));
+      if (max > limit * 2) return max;
     }
   } else {
     for (const v of Object.values(value as Record<string, unknown>)) {
-      max = Math.max(max, measureJsonDepth(v, current + 1));
+      max = Math.max(max, measureJsonDepth(v, current + 1, limit));
+      if (max > limit * 2) return max;
     }
   }
   return max;
@@ -121,6 +126,23 @@ export class PreFilter {
 
   constructor(config?: Partial<SyntacticFilterConfig>) {
     this.config = { ...DEFAULT_SYNTACTIC_CONFIG, ...config };
+
+    const MAX_ALLOWED_DEPTH = 1_000; // 2x cap in measureJsonDepth → max ~2k frames, well within stack
+    if (!Number.isFinite(this.config.maxJsonDepth) || this.config.maxJsonDepth <= 0) {
+      throw new Error(
+        `PreFilter: maxJsonDepth must be a positive finite number. Got ${this.config.maxJsonDepth}`,
+      );
+    }
+    if (this.config.maxJsonDepth > MAX_ALLOWED_DEPTH) {
+      throw new Error(
+        `PreFilter: maxJsonDepth ${this.config.maxJsonDepth} exceeds maximum allowed value ${MAX_ALLOWED_DEPTH}`,
+      );
+    }
+    if (!Number.isFinite(this.config.maxPayloadBytes) || this.config.maxPayloadBytes <= 0) {
+      throw new Error(
+        `PreFilter: maxPayloadBytes must be a positive finite number. Got ${this.config.maxPayloadBytes}`,
+      );
+    }
   }
 
   /**
@@ -146,7 +168,7 @@ export class PreFilter {
     // JSON depth
     try {
       const parsed = JSON.parse(content);
-      const depth = measureJsonDepth(parsed);
+      const depth = measureJsonDepth(parsed, 0, this.config.maxJsonDepth);
       if (depth > this.config.maxJsonDepth) {
         const ruleId = SYNTACTIC_RULES.structuralRuleIds.excessiveDepth;
         ruleIds.push(ruleId);

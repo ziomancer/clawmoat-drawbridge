@@ -117,6 +117,10 @@ export class DrawbridgeScanner {
       const ruleId = normalizeRuleId(finding.type, finding.subtype);
       const sev = effectiveSeverity(finding.severity);
 
+      // NOTE (v1.0): `source` holds a direct reference to the ClawMoat finding object.
+      // Consumer callbacks that mutate finding.source will affect downstream sanitization.
+      // Deep-cloning here would add overhead on the hot path. Accepted tradeoff for v1.0;
+      // v1.1 may freeze the source or copy on construction.
       const enriched: DrawbridgeFinding = {
         ruleId,
         source: finding,
