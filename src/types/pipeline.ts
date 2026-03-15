@@ -13,7 +13,7 @@ import type { DrawbridgeScanResult, DrawbridgeScannerConfig } from "./scanner.js
 import type { FrequencyConfig, EscalationTier } from "./frequency.js";
 import type { ContextProfile, BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
 import type { TwoPassConfig, PreFilterResult } from "./validation.js";
-import type { AuditConfig, AuditEvent } from "./audit.js";
+import type { AuditEmitterConfig, AuditEvent } from "./audit.js";
 import type { AlertingConfig } from "./alerting.js";
 import type { ContentSource } from "./common.js";
 
@@ -66,7 +66,7 @@ export interface DrawbridgePipelineConfig {
     schema?: { enabled: boolean };
     twoPass?: Partial<TwoPassConfig>;
   };
-  audit?: Partial<AuditConfig>;
+  audit?: Partial<AuditEmitterConfig>;
   alerting?: Partial<AlertingConfig>;
   /** MCP servers that bypass full inspection */
   trustedServers?: string[];

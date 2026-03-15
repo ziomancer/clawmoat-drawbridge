@@ -11,10 +11,14 @@ export { FrequencyTracker } from "./frequency/index.js";
 // === v0.3 implemented ===
 export { sanitizeContent } from "./sanitize/index.js";
 
-// === v0.3+ stubs (pipeline modules) ===
+// === v0.3 implemented ===
 export { ProfileResolver } from "./profiles/index.js";
 export { PreFilter } from "./validation/index.js";
-export { AuditEmitter } from "./audit/index.js";
+
+// === v0.4 implemented ===
+export { AuditEmitter, sha256 } from "./audit/index.js";
+
+// === v0.5+ stubs (pipeline modules) ===
 export { AlertManager } from "./alerting/index.js";
 export { DrawbridgePipeline } from "./pipeline/index.js";
 
@@ -72,10 +76,27 @@ export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES } from "./types/vali
 export { SYNTACTIC_RULES, SYNTACTIC_RULE_TAXONOMY } from "./validation/index.js";
 
 export type {
-  // Audit (v0.2+)
+  // Audit (v0.4)
   AuditEventType,
   AuditEvent,
-  AuditConfig,
+  AuditEmitterConfig,
+  TypedAuditEvent,
+  ScanAuditEvent,
+  SyntacticAuditEvent,
+  FrequencyAuditEvent,
+  SanitizeAuditEvent,
+  ProfileAuditEvent,
+  AuditConfigEvent,
+  FlagsSummaryEvent,
+  RuleTriggeredEvent,
+  OutputDiffEvent,
+  RawCaptureEvent,
+} from "./types/audit.js";
+
+export {
+  EVENT_MIN_VERBOSITY,
+  meetsVerbosity,
+  DEFAULT_AUDIT_CONFIG,
 } from "./types/audit.js";
 
 export type {
