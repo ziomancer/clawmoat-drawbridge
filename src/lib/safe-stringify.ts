@@ -36,10 +36,8 @@ export function safeStringify(content: unknown): string {
   try {
     return JSON.stringify(content, circularReplacer(), 0);
   } catch {
-    try {
-      return String(content);
-    } catch {
-      return "[Unserializable]";
-    }
+    // JSON.stringify can throw on BigInt values or bad toJSON methods.
+    // Return a JSON-safe diagnostic rather than "[object Object]".
+    return '"[Unserializable]"';
   }
 }
