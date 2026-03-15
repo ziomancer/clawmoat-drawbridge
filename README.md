@@ -204,44 +204,44 @@ if (result.terminated) {
 
 ```
                     ┌─────────────────────────────────────┐
-                    │           DrawbridgePipeline         │
-                    │            inspect(input)            │
+                    │           DrawbridgePipeline        │
+                    │            inspect(input)           │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
-                    │         Trust Check                  │
-                    │   trusted server? → fast-path exit   │
+                    │         Trust Check                 │
+                    │   trusted server? → fast-path exit  │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
-                    │     Syntactic Pre-Filter             │
-                    │   regex patterns, structural checks  │──── findings ────┐
+                    │     Syntactic Pre-Filter            │
+                    │   regex patterns, structural checks │──── findings  ────┐
                     └──────────────┬──────────────────────┘                   │
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
-                    │      Two-Pass Gate                   │                   │
-                    │  hard block? skip scanner            │                   │
-                    │  (frequency override can force it)   │                   │
+                    │      Two-Pass Gate                  │                   │
+                    │  hard block? skip scanner           │                   │
+                    │  (frequency override can force it)  │                   │
                     └──────────────┬──────────────────────┘                   │
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
-                    │     Scanner (ClawMoat)               │                   │
-                    │   prompt injection, PII, secrets     │──── findings ────┤
+                    │     Scanner (ClawMoat)              │                   │
+                    │   prompt injection, PII, secrets    │──── findings  ────┤
                     └──────────────┬──────────────────────┘                   │
                                    │                                          │
                     ┌──────────────▼──────────────────────┐    ┌─────────────▼──────────┐
-                    │         Sanitize                     │    │  Frequency Tracker      │
-                    │   redact blocked content             │    │  decay scoring, tiers   │
+                    │         Sanitize                    │    │  Frequency Tracker      │
+                    │   redact blocked content            │    │  decay scoring, tiers   │
                     └──────────────┬──────────────────────┘    └─────────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
-                    │       Audit Emitter                  │
-                    │  verbosity-gated structured events   │
+                    │       Audit Emitter                 │
+                    │  verbosity-gated structured events  │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
-                    │       Alert Manager                  │
-                    │  rules → onAlert callback            │
+                    │       Alert Manager                 │
+                    │  rules → onAlert callback           │
                     └─────────────────────────────────────┘
 ```
 
