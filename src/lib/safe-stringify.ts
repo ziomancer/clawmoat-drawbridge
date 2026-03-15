@@ -9,14 +9,23 @@
  */
 function circularReplacer(maxDepth = 10) {
   const seen = new WeakSet();
-  let depth = 0;
+  const depths = new WeakMap<object, number>();
 
   return function (this: unknown, _key: string, value: unknown): unknown {
     if (typeof value === "object" && value !== null) {
       if (seen.has(value)) return "[Circular]";
-      if (depth >= maxDepth) return "[Depth limit]";
+
+      // Derive depth from parent (this) rather than a shared counter.
+      // JSON.stringify sets `this` to the object holding the current key.
+      let parentDepth = -1;
+      if (typeof this === "object" && this !== null) {
+        parentDepth = depths.get(this) ?? -1;
+      }
+      const currentDepth = parentDepth + 1;
+
+      if (currentDepth >= maxDepth) return "[Depth limit]";
       seen.add(value);
-      depth++;
+      depths.set(value, currentDepth);
     }
     return value;
   };

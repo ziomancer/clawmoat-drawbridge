@@ -69,6 +69,9 @@ export class DrawbridgePipeline {
   /** Tracks last emitted escalation tier per session (for transition-only emission) */
   private readonly lastEmittedTier: Map<string, EscalationTier> = new Map();
 
+  /** Max entries in lastEmittedTier before FIFO eviction (matches frequency tracker scale) */
+  private static readonly MAX_TIER_CACHE_SIZE = 10_000;
+
   /** Tier1 threshold from frequency config (stored at construction since tracker.config is private) */
   private readonly tier1Threshold: number;
 
@@ -619,6 +622,12 @@ export class DrawbridgePipeline {
     if (tierRank[result.tier] <= tierRank[lastTier]) return;
 
     this.lastEmittedTier.set(sessionId, result.tier);
+
+    // FIFO eviction when cache exceeds bound
+    if (this.lastEmittedTier.size > DrawbridgePipeline.MAX_TIER_CACHE_SIZE) {
+      const oldest = this.lastEmittedTier.keys().next().value;
+      if (oldest !== undefined) this.lastEmittedTier.delete(oldest);
+    }
 
     this.routeEvent(
       this.auditor.emitFrequency({
