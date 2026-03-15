@@ -19,10 +19,18 @@ import {
 } from "../types/scanner.js";
 import { sanitizeContent } from "../sanitize/index.js";
 
+/** Reserved prefixes for Drawbridge internal modules (pre-filter, schema) */
+const RESERVED_TYPE_PREFIXES = ["syntactic", "schema"];
+
 /** Normalize a ClawMoat type+subtype into a Drawbridge rule ID. */
 export function normalizeRuleId(type: string, subtype: string): string {
   const clean = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, ".");
-  return `drawbridge.${clean(type)}.${clean(subtype)}`;
+  const cleanType = clean(type);
+  // Prevent collision with drawbridge.syntactic.* and drawbridge.schema.*
+  const safeType = RESERVED_TYPE_PREFIXES.includes(cleanType)
+    ? `scanner.${cleanType}`
+    : cleanType;
+  return `drawbridge.${safeType}.${clean(subtype)}`;
 }
 
 /**
@@ -146,7 +154,11 @@ export class DrawbridgeScanner {
 
       findings.push(enriched);
       if (blocked) blockingFindings.push(enriched);
-      this.config.onFinding?.(enriched);
+      try {
+        this.config.onFinding?.(enriched);
+      } catch {
+        // Consumer callbacks must never break internal state
+      }
     }
 
     return {
