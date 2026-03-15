@@ -78,8 +78,9 @@ export function sanitizeContent(
       // Position is bad (wrong, negative, out-of-bounds). For a content-filtering
       // library, failing to redact is worse than over-redacting, so redact ALL
       // occurrences of the matched string.
+      const MAX_FALLBACK_RANGES = 1_000;
       let searchFrom = 0;
-      while (searchFrom < content.length) {
+      while (searchFrom < content.length && ranges.length < MAX_FALLBACK_RANGES) {
         const idx = content.indexOf(matched, searchFrom);
         if (idx === -1) break;
         ranges.push({
