@@ -31,11 +31,7 @@ function circularReplacer(maxDepth = 10) {
   };
 }
 
-/** Safely stringify any value, handling circular references. */
+/** Safely stringify any value, handling circular references and depth limits. */
 export function safeStringify(content: unknown): string {
-  try {
-    return JSON.stringify(content);
-  } catch {
-    return JSON.stringify(content, circularReplacer(), 0);
-  }
+  return JSON.stringify(content, circularReplacer(), 0);
 }

@@ -117,8 +117,8 @@ describe("sanitizeContent — position handling", () => {
     expect(result.sanitized).toBe("the [REDACTED] is here");
   });
 
-  // 7. Duplicate matched string — skip when position is ambiguous
-  it("duplicate matched string: skipped when position is invalid and match is non-unique", () => {
+  // 7. Duplicate matched string — redact ALL occurrences when position is bad
+  it("duplicate matched string: all occurrences redacted when position is invalid", () => {
     const content = "bad word and bad word again";
     const findings = [
       makeFinding({
@@ -128,8 +128,8 @@ describe("sanitizeContent — position handling", () => {
       }),
     ];
     const result = sanitizeContent(content, findings);
-    expect(result.sanitized).toBe("bad word and bad word again");
-    expect(result.redactionCount).toBe(0);
+    expect(result.sanitized).toBe("[REDACTED] and [REDACTED] again");
+    expect(result.redactionCount).toBe(2);
   });
 
   // 8. Overlapping findings merged

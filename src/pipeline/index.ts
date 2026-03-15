@@ -69,7 +69,7 @@ export class DrawbridgePipeline {
   /** Tracks last emitted escalation tier per session (for transition-only emission) */
   private readonly lastEmittedTier: Map<string, EscalationTier> = new Map();
 
-  /** Max entries in lastEmittedTier before FIFO eviction (matches frequency tracker scale) */
+  /** Max entries in lastEmittedTier before LRU eviction (matches frequency tracker scale) */
   private static readonly MAX_TIER_CACHE_SIZE = 10_000;
 
   /** Tier1 threshold from frequency config (stored at construction since tracker.config is private) */

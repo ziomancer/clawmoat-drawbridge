@@ -65,34 +65,32 @@ export function sanitizeContent(
     const matched = finding.source.matched;
     if (!matched) continue;
 
-    let start: number;
-    if (finding.source.position >= 0 && finding.source.position < content.length) {
-      // Verify the slice at this position actually matches the reported string.
-      // If the scanner returned a wrong position (compromised engine, stale offset),
-      // fall through to indexOf — but only if the match is unambiguous.
-      if (content.slice(finding.source.position, finding.source.position + matched.length) === matched) {
-        start = finding.source.position;
-      } else {
-        // Only use indexOf if the match appears exactly once in content.
-        // Multiple occurrences → we can't know which one was flagged → skip.
-        const first = content.indexOf(matched);
-        if (first === -1 || content.indexOf(matched, first + 1) !== -1) continue;
-        start = first;
-      }
+    if (finding.source.position >= 0 && finding.source.position < content.length &&
+        content.slice(finding.source.position, finding.source.position + matched.length) === matched) {
+      // Verified position — redact exactly this occurrence.
+      ranges.push({
+        start: finding.source.position,
+        end: Math.min(finding.source.position + matched.length, content.length),
+        ruleId: finding.ruleId,
+        severityRank: severityRank(finding.source.severity),
+      });
     } else {
-      // Fallback: find occurrence in content (handles negative and out-of-bounds).
-      // Only redact if the match is unique — ambiguous positions are skipped.
-      const first = content.indexOf(matched);
-      if (first === -1 || content.indexOf(matched, first + 1) !== -1) continue;
-      start = first;
+      // Position is bad (wrong, negative, out-of-bounds). For a content-filtering
+      // library, failing to redact is worse than over-redacting, so redact ALL
+      // occurrences of the matched string.
+      let searchFrom = 0;
+      while (searchFrom < content.length) {
+        const idx = content.indexOf(matched, searchFrom);
+        if (idx === -1) break;
+        ranges.push({
+          start: idx,
+          end: Math.min(idx + matched.length, content.length),
+          ruleId: finding.ruleId,
+          severityRank: severityRank(finding.source.severity),
+        });
+        searchFrom = idx + matched.length;
+      }
     }
-
-    ranges.push({
-      start,
-      end: Math.min(start + matched.length, content.length),
-      ruleId: finding.ruleId,
-      severityRank: severityRank(finding.source.severity),
-    });
   }
 
   if (ranges.length === 0) {
