@@ -1,4 +1,6 @@
-# @ziomancer/clawmoat-drawbridge
+<p align="center">
+  <img src="./drawbridge-logo.svg" width="500" alt="Drawbridge Logo">
+</p>
 
 Session-aware content sanitization pipeline powered by [ClawMoat](https://github.com/darfaz/clawmoat).
 Standalone library — wire into any agent pipeline.
