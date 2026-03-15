@@ -433,17 +433,23 @@ export class DrawbridgePipeline {
   // Public API: module access
   // ---------------------------------------------------------------------------
 
-  /** Access the underlying scanner */
+  /**
+   * Access the underlying scanner.
+   *
+   * **Caveat (v1.0):** Returns a mutable reference to the live instance.
+   * Modifications affect pipeline behavior. Treat as read-only unless you
+   * understand the implications. v1.1 may freeze or proxy these accessors.
+   */
   get scannerModule(): DrawbridgeScanner {
     return this.scanner;
   }
 
-  /** Access the underlying frequency tracker */
+  /** Access the underlying frequency tracker. See scannerModule caveat re: mutability. */
   get frequencyModule(): FrequencyTracker {
     return this.tracker;
   }
 
-  /** Access the underlying pre-filter */
+  /** Access the underlying pre-filter. See scannerModule caveat re: mutability. */
   get preFilterModule(): PreFilter {
     return this.preFilter;
   }
@@ -453,12 +459,12 @@ export class DrawbridgePipeline {
     return this.profile.profile;
   }
 
-  /** Access the audit emitter */
+  /** Access the audit emitter. See scannerModule caveat re: mutability. */
   get auditModule(): AuditEmitter {
     return this.auditor;
   }
 
-  /** Access the alert manager */
+  /** Access the alert manager. See scannerModule caveat re: mutability. */
   get alertModule(): AlertManager {
     return this.alerter;
   }

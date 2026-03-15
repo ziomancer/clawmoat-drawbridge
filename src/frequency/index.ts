@@ -57,6 +57,13 @@ export class FrequencyTracker {
       );
     }
 
+    // Validate halfLifeMs — NaN or non-positive silently disables decay (#4)
+    if (!Number.isFinite(this.config.halfLifeMs) || this.config.halfLifeMs <= 0) {
+      throw new Error(
+        `FrequencyTracker: halfLifeMs must be a positive finite number. Got ${this.config.halfLifeMs}`,
+      );
+    }
+
     this.sessions = new Map();
 
     // Pre-partition weight keys into exact and glob for fast matching
@@ -64,6 +71,12 @@ export class FrequencyTracker {
     const globs: Array<{ prefix: string; weight: number }> = [];
 
     for (const [key, weight] of Object.entries(this.config.weights)) {
+      // Validate weights are non-negative — negative weights would reduce suspicion (#5)
+      if (!Number.isFinite(weight) || weight < 0) {
+        throw new Error(
+          `FrequencyTracker: weight for "${key}" must be a non-negative finite number. Got ${weight}`,
+        );
+      }
       if (key.endsWith(".*")) {
         globs.push({ prefix: key.slice(0, -2), weight });
       } else {
@@ -146,7 +159,8 @@ export class FrequencyTracker {
   }
 
   getState(sessionId: string): SessionSuspicionState | null {
-    return this.sessions.get(sessionId) ?? null;
+    const state = this.sessions.get(sessionId);
+    return state ? { ...state } : null;
   }
 
   reset(sessionId: string): void {

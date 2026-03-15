@@ -97,16 +97,19 @@ function contentHasHomoglyphs(text: string): boolean {
 // JSON depth measurement
 // ---------------------------------------------------------------------------
 
-function measureJsonDepth(value: unknown, current = 0): number {
+function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
   if (typeof value !== "object" || value === null) return current;
+  if (current + 1 > limit) return current + 1; // bail early — already exceeds limit
   let max = current + 1;
   if (Array.isArray(value)) {
     for (const item of value) {
-      max = Math.max(max, measureJsonDepth(item, current + 1));
+      max = Math.max(max, measureJsonDepth(item, current + 1, limit));
+      if (max > limit) return max; // short-circuit
     }
   } else {
     for (const v of Object.values(value as Record<string, unknown>)) {
-      max = Math.max(max, measureJsonDepth(v, current + 1));
+      max = Math.max(max, measureJsonDepth(v, current + 1, limit));
+      if (max > limit) return max; // short-circuit
     }
   }
   return max;
@@ -146,7 +149,7 @@ export class PreFilter {
     // JSON depth
     try {
       const parsed = JSON.parse(content);
-      const depth = measureJsonDepth(parsed);
+      const depth = measureJsonDepth(parsed, 0, this.config.maxJsonDepth);
       if (depth > this.config.maxJsonDepth) {
         const ruleId = SYNTACTIC_RULES.structuralRuleIds.excessiveDepth;
         ruleIds.push(ruleId);
