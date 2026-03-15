@@ -66,10 +66,10 @@ export function sanitizeContent(
     if (!matched) continue;
 
     let start: number;
-    if (finding.source.position >= 0) {
+    if (finding.source.position >= 0 && finding.source.position < content.length) {
       start = finding.source.position;
     } else {
-      // Fallback: find first occurrence in content
+      // Fallback: find first occurrence in content (handles negative and out-of-bounds)
       start = content.indexOf(matched);
       if (start === -1) continue;
     }
