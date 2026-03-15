@@ -124,6 +124,17 @@ export class PreFilter {
 
   constructor(config?: Partial<SyntacticFilterConfig>) {
     this.config = { ...DEFAULT_SYNTACTIC_CONFIG, ...config };
+
+    if (!Number.isFinite(this.config.maxJsonDepth) || this.config.maxJsonDepth <= 0) {
+      throw new Error(
+        `PreFilter: maxJsonDepth must be a positive finite number. Got ${this.config.maxJsonDepth}`,
+      );
+    }
+    if (!Number.isFinite(this.config.maxPayloadBytes) || this.config.maxPayloadBytes <= 0) {
+      throw new Error(
+        `PreFilter: maxPayloadBytes must be a positive finite number. Got ${this.config.maxPayloadBytes}`,
+      );
+    }
   }
 
   /**

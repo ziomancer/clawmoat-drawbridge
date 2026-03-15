@@ -625,14 +625,24 @@ export class DrawbridgePipeline {
       tier3: 3,
     };
 
-    if (tierRank[result.tier] <= tierRank[lastTier]) return;
+    // LRU refresh: delete-and-re-set moves the key to the end of insertion order,
+    // so eviction always removes the least-recently-accessed session.
+    if (this.lastEmittedTier.has(sessionId)) {
+      this.lastEmittedTier.delete(sessionId);
+    }
+
+    if (tierRank[result.tier] <= tierRank[lastTier]) {
+      // No escalation — restore the existing tier at the refreshed position.
+      this.lastEmittedTier.set(sessionId, lastTier);
+      return;
+    }
 
     this.lastEmittedTier.set(sessionId, result.tier);
 
-    // FIFO eviction when cache exceeds bound
+    // LRU eviction when cache exceeds bound — removes least-recently-accessed
     if (this.lastEmittedTier.size > DrawbridgePipeline.MAX_TIER_CACHE_SIZE) {
-      const oldest = this.lastEmittedTier.keys().next().value;
-      if (oldest !== undefined) this.lastEmittedTier.delete(oldest);
+      const lru = this.lastEmittedTier.keys().next().value;
+      if (lru !== undefined) this.lastEmittedTier.delete(lru);
     }
 
     this.routeEvent(

@@ -69,19 +69,22 @@ export function sanitizeContent(
     if (finding.source.position >= 0 && finding.source.position < content.length) {
       // Verify the slice at this position actually matches the reported string.
       // If the scanner returned a wrong position (compromised engine, stale offset),
-      // fall through to indexOf rather than redacting the wrong content.
+      // fall through to indexOf — but only if the match is unambiguous.
       if (content.slice(finding.source.position, finding.source.position + matched.length) === matched) {
         start = finding.source.position;
       } else {
-        start = content.indexOf(matched);
-        if (start === -1) continue;
+        // Only use indexOf if the match appears exactly once in content.
+        // Multiple occurrences → we can't know which one was flagged → skip.
+        const first = content.indexOf(matched);
+        if (first === -1 || content.indexOf(matched, first + 1) !== -1) continue;
+        start = first;
       }
     } else {
-      // Fallback: find first occurrence in content (handles negative and out-of-bounds).
-      // NOTE (v1.1): indexOf always finds the first occurrence, not necessarily the one
-      // the scanner flagged. Improving this requires richer position data from the scanner.
-      start = content.indexOf(matched);
-      if (start === -1) continue;
+      // Fallback: find occurrence in content (handles negative and out-of-bounds).
+      // Only redact if the match is unique — ambiguous positions are skipped.
+      const first = content.indexOf(matched);
+      if (first === -1 || content.indexOf(matched, first + 1) !== -1) continue;
+      start = first;
     }
 
     ranges.push({

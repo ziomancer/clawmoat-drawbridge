@@ -117,8 +117,8 @@ describe("sanitizeContent — position handling", () => {
     expect(result.sanitized).toBe("the [REDACTED] is here");
   });
 
-  // 7. Duplicate matched string — only first replaced via indexOf fallback
-  it("duplicate matched string: indexOf replaces first occurrence", () => {
+  // 7. Duplicate matched string — skip when position is ambiguous
+  it("duplicate matched string: skipped when position is invalid and match is non-unique", () => {
     const content = "bad word and bad word again";
     const findings = [
       makeFinding({
@@ -128,8 +128,8 @@ describe("sanitizeContent — position handling", () => {
       }),
     ];
     const result = sanitizeContent(content, findings);
-    expect(result.sanitized).toBe("[REDACTED] and bad word again");
-    expect(result.redactionCount).toBe(1);
+    expect(result.sanitized).toBe("bad word and bad word again");
+    expect(result.redactionCount).toBe(0);
   });
 
   // 8. Overlapping findings merged
