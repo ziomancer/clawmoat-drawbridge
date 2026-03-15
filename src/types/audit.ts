@@ -60,7 +60,7 @@ const VERBOSITY_RANK: Record<AuditVerbosity, number> = {
  * Minimum verbosity required to emit each event type.
  * Events are emitted when the configured verbosity >= the event's minimum.
  */
-export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = {
+export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = Object.freeze({
   // Minimal tier — security-relevant outcomes only
   scan_block: "minimal",
   syntactic_fail: "minimal",
@@ -84,7 +84,7 @@ export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = {
   // Maximum tier — raw content capture
   raw_input_captured: "maximum",
   raw_output_captured: "maximum",
-};
+});
 
 /** Check if a verbosity level meets or exceeds a required minimum */
 export function meetsVerbosity(

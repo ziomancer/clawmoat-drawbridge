@@ -17,28 +17,28 @@ import { DEFAULT_SYNTACTIC_CONFIG } from "../types/validation.js";
 // ---------------------------------------------------------------------------
 
 export const SYNTACTIC_RULES = Object.freeze({
-  injectionPatterns: [
-    { pattern: /ignore previous instructions/i, ruleId: "drawbridge.syntactic.injection.ignore-previous" },
-    { pattern: /ignore all instructions/i, ruleId: "drawbridge.syntactic.injection.ignore-all" },
-    { pattern: /disregard your/i, ruleId: "drawbridge.syntactic.injection.disregard" },
-    { pattern: /you are now/i, ruleId: "drawbridge.syntactic.injection.you-are-now" },
-    { pattern: /new instructions\s*:/i, ruleId: "drawbridge.syntactic.injection.new-instructions" },
-    { pattern: /system override/i, ruleId: "drawbridge.syntactic.injection.system-override" },
-    { pattern: /^SYSTEM:/m, ruleId: "drawbridge.syntactic.injection.system-prefix" },
-    { pattern: /\[INST\]|<\/INST>/i, ruleId: "drawbridge.syntactic.injection.inst-delimiter" },
-  ],
-  roleSwitchTriggers: [/you are a/i, /act as/i, /pretend you are/i, /roleplay as/i],
-  capabilityGrants: [/no restrictions/i, /no limits/i, /without filters/i, /DAN mode/i, /developer mode/i],
-  structuralRuleIds: {
+  injectionPatterns: Object.freeze([
+    Object.freeze({ pattern: /ignore previous instructions/i, ruleId: "drawbridge.syntactic.injection.ignore-previous" }),
+    Object.freeze({ pattern: /ignore all instructions/i, ruleId: "drawbridge.syntactic.injection.ignore-all" }),
+    Object.freeze({ pattern: /disregard your/i, ruleId: "drawbridge.syntactic.injection.disregard" }),
+    Object.freeze({ pattern: /you are now/i, ruleId: "drawbridge.syntactic.injection.you-are-now" }),
+    Object.freeze({ pattern: /new instructions\s*:/i, ruleId: "drawbridge.syntactic.injection.new-instructions" }),
+    Object.freeze({ pattern: /system override/i, ruleId: "drawbridge.syntactic.injection.system-override" }),
+    Object.freeze({ pattern: /^SYSTEM:/m, ruleId: "drawbridge.syntactic.injection.system-prefix" }),
+    Object.freeze({ pattern: /\[INST\]|<\/INST>/i, ruleId: "drawbridge.syntactic.injection.inst-delimiter" }),
+  ]),
+  roleSwitchTriggers: Object.freeze([/you are a/i, /act as/i, /pretend you are/i, /roleplay as/i]),
+  capabilityGrants: Object.freeze([/no restrictions/i, /no limits/i, /without filters/i, /DAN mode/i, /developer mode/i]),
+  structuralRuleIds: Object.freeze({
     oversizedPayload: "drawbridge.syntactic.structural.oversized-payload",
     excessiveDepth: "drawbridge.syntactic.structural.excessive-depth",
     binaryContent: "drawbridge.syntactic.structural.binary-content",
-  },
-  encodingRuleIds: {
+  }),
+  encodingRuleIds: Object.freeze({
     base64InText: "drawbridge.syntactic.encoding.base64-in-text",
     nullByte: "drawbridge.syntactic.encoding.null-byte",
     homoglyphSubstitution: "drawbridge.syntactic.encoding.homoglyph-substitution",
-  },
+  }),
 } as const);
 
 /** All valid syntactic rule IDs — used by profiles for validation */
