@@ -100,12 +100,18 @@ export {
 } from "./types/audit.js";
 
 export type {
-  // Alerting (v0.2+)
+  // Alerting (v0.5)
   AlertSeverity,
   AlertPayload,
-  AlertChannel,
-  WebhookChannelConfig,
-  AlertingConfig,
+  AlertRuleId,
+  AlertRuleConfigs,
+  AlertManagerConfig,
+} from "./types/alerting.js";
+
+export {
+  ALERT_SEVERITY_RANK,
+  DEFAULT_ALERT_RULES,
+  DEFAULT_ALERT_CONFIG,
 } from "./types/alerting.js";
 
 export type {

@@ -14,7 +14,7 @@ import type { FrequencyConfig, EscalationTier } from "./frequency.js";
 import type { ContextProfile, BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
 import type { TwoPassConfig, PreFilterResult } from "./validation.js";
 import type { AuditEmitterConfig, AuditEvent } from "./audit.js";
-import type { AlertingConfig } from "./alerting.js";
+import type { AlertManagerConfig } from "./alerting.js";
 import type { ContentSource } from "./common.js";
 
 // Re-export for convenience
@@ -67,7 +67,7 @@ export interface DrawbridgePipelineConfig {
     twoPass?: Partial<TwoPassConfig>;
   };
   audit?: Partial<AuditEmitterConfig>;
-  alerting?: Partial<AlertingConfig>;
+  alerting?: Partial<AlertManagerConfig>;
   /** MCP servers that bypass full inspection */
   trustedServers?: string[];
 }

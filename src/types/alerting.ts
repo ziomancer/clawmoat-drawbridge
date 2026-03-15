@@ -1,56 +1,156 @@
 /**
- * Alert rules, delivery channels, and escalation.
+ * Alert rules, delivery, deduplication, and rate limiting.
  *
  * Spec reference: Audit Alerting v2.3
- *
- * NOT IMPLEMENTED in v0.1. Types exported for pipeline type stability.
  */
+
+import type { TypedAuditEvent } from "./audit.js";
 
 /** Alert severity levels */
 export type AlertSeverity = "info" | "low" | "medium" | "high" | "critical";
 
-/** Alert payload delivered to channels */
+/** Alert severity ranking for comparison */
+export const ALERT_SEVERITY_RANK: Record<AlertSeverity, number> = {
+  info: 1,
+  low: 2,
+  medium: 3,
+  high: 4,
+  critical: 5,
+};
+
+/** Alert rule identifiers */
+export type AlertRuleId =
+  | "syntacticFailBurst"
+  | "frequencyEscalationTier2"
+  | "frequencyEscalationTier3"
+  | "scanBlockAfterSyntacticPass"
+  | "writeFailSpike";
+// trustedToolSchemaFail deferred to v1.0
+
+/** Alert payload delivered to consumers */
 export interface AlertPayload {
-  ruleId: string;
+  /** Unique alert identifier for deduplication tracking */
+  alertId: string;
+  /** Which rule fired */
+  ruleId: AlertRuleId;
+  /** Alert severity */
   severity: AlertSeverity;
-  title: string;
-  detail: string;
-  agentId: string;
+  /** Session that triggered the alert */
   sessionId: string;
+  /** Optional agent identifier */
+  agentId?: string;
+  /** ISO 8601 timestamp */
   timestamp: string;
-  recentContext: unknown[];
-  suppressedCount?: number;
-}
-
-/** Alert delivery channel types */
-export type AlertChannel = "log" | "file" | "webhook";
-
-/** Webhook channel configuration */
-export interface WebhookChannelConfig {
-  url: string;
-  secret?: string;
-  retries: number;
-  retryDelayMs: number;
-  timeoutMs: number;
-}
-
-/** Alerting configuration */
-export interface AlertingConfig {
-  enabled: boolean;
-  channels: {
-    webhook?: WebhookChannelConfig;
+  /** Human-readable one-line summary */
+  summary: string;
+  /** Detailed context */
+  details: {
+    /** The event(s) that caused the alert */
+    triggeringEvents: TypedAuditEvent[];
+    /** Recent events from same session (capped by recentContextMax) */
+    recentContext: TypedAuditEvent[];
+    /** Current frequency score if applicable */
+    sessionSuspicionScore?: number;
   };
-  suppression: {
+  /** Rule configuration that governed this alert */
+  metadata: {
+    ruleConfig: Record<string, unknown>;
+  };
+}
+
+/** Per-rule configuration */
+export interface AlertRuleConfigs {
+  syntacticFailBurst: {
+    enabled: boolean;
+    /** Minimum events to trigger. Default: 5 */
+    count: number;
+    /** Time window in minutes. Default: 10 */
     windowMinutes: number;
   };
+  frequencyEscalation: {
+    /** Tier 2 alerts. Default: true */
+    tier2Enabled: boolean;
+    /** Tier 3 alerts. ALWAYS true — cannot be disabled */
+    tier3Enabled: true;
+  };
+  scanBlockAfterSyntacticPass: {
+    enabled: boolean;
+    /**
+     * After this many occurrences within 24h, severity escalates
+     * from medium to high. Default: 3
+     */
+    escalateAfter: number;
+  };
+  writeFailSpike: {
+    enabled: boolean;
+    /** Minimum events to trigger. Default: 3 */
+    count: number;
+    /** Time window in minutes. Default: 5 */
+    windowMinutes: number;
+  };
+}
+
+/** Alert manager configuration */
+export interface AlertManagerConfig {
+  /** Master toggle. When false, no alerts fire. Default: true */
+  enabled: boolean;
+
+  /** Per-rule configuration */
+  rules: AlertRuleConfigs;
+
+  /** Deduplication window in minutes. Default: 5 */
+  suppressionWindowMinutes: number;
+
+  /** Rate limits */
   rateLimit: {
     maxPerMinute: number;
     maxPerHour: number;
   };
-  retention: {
-    days: number;
-  };
-  index: {
-    ttlMinutes: number;
-  };
+
+  /** Max recent events included in alert context. Default: 20 */
+  recentContextMax: number;
+
+  /**
+   * Alert handler. Called for every alert that passes dedup and rate limits.
+   * Consumer decides delivery (Slack, PagerDuty, log file, etc.).
+   */
+  onAlert?: (alert: AlertPayload) => void;
+
+  /**
+   * Error handler. Called if onAlert throws.
+   * Alerting must never crash the pipeline.
+   */
+  onError?: (error: unknown, alert: AlertPayload) => void;
 }
+
+export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
+  syntacticFailBurst: {
+    enabled: true,
+    count: 5,
+    windowMinutes: 10,
+  },
+  frequencyEscalation: {
+    tier2Enabled: true,
+    tier3Enabled: true,
+  },
+  scanBlockAfterSyntacticPass: {
+    enabled: true,
+    escalateAfter: 3,
+  },
+  writeFailSpike: {
+    enabled: true,
+    count: 3,
+    windowMinutes: 5,
+  },
+};
+
+export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = {
+  enabled: true,
+  rules: DEFAULT_ALERT_RULES,
+  suppressionWindowMinutes: 5,
+  rateLimit: {
+    maxPerMinute: 20,
+    maxPerHour: 100,
+  },
+  recentContextMax: 20,
+};
