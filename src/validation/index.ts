@@ -99,17 +99,19 @@ function contentHasHomoglyphs(text: string): boolean {
 
 function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
   if (typeof value !== "object" || value === null) return current;
-  if (current + 1 > limit) return current + 1; // bail early — already exceeds limit
+  // Hard safety cap at 2x limit — still short-circuits deep bombs but reports
+  // a more informative depth than just limit+1 for diagnostics/triage.
+  if (current + 1 > limit * 2) return current + 1;
   let max = current + 1;
   if (Array.isArray(value)) {
     for (const item of value) {
       max = Math.max(max, measureJsonDepth(item, current + 1, limit));
-      if (max > limit) return max; // short-circuit
+      if (max > limit * 2) return max;
     }
   } else {
     for (const v of Object.values(value as Record<string, unknown>)) {
       max = Math.max(max, measureJsonDepth(v, current + 1, limit));
-      if (max > limit) return max; // short-circuit
+      if (max > limit * 2) return max;
     }
   }
   return max;
