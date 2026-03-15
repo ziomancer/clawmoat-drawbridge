@@ -18,13 +18,13 @@ ClawMoat detects threats in a single scan. Drawbridge adds:
 ## Install
 
 ```bash
-npm install @vigilharbor/clawmoat-drawbridge-sanitizer clawmoat
+npm install @ziomancer/clawmoat-drawbridge clawmoat
 ```
 
 ## Quick Start
 
 ```ts
-import { DrawbridgeScanner } from "@vigilharbor/clawmoat-drawbridge-sanitizer";
+import { DrawbridgeScanner } from "@ziomancer/clawmoat-drawbridge";
 
 const scanner = new DrawbridgeScanner({
   blockThreshold: "medium",
