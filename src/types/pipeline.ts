@@ -1,20 +1,16 @@
 /**
- * Pipeline orchestration: routes content through validation stages,
+ * Pipeline orchestration types: routes content through validation stages,
  * scanner, frequency tracking, and audit emission.
  *
- * The pipeline is the main entry point for consumers who want the
- * full Drawbridge experience. For scanner-only usage, import
- * DrawbridgeScanner directly.
- *
- * NOT IMPLEMENTED in v0.1. Types exported for API stability.
+ * v1.0 — full pipeline orchestration.
  */
 
-import type { DrawbridgeScanResult, DrawbridgeScannerConfig } from "./scanner.js";
-import type { FrequencyConfig, EscalationTier } from "./frequency.js";
-import type { ContextProfile, BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
-import type { TwoPassConfig, PreFilterResult } from "./validation.js";
-import type { AuditEmitterConfig, AuditEvent } from "./audit.js";
-import type { AlertManagerConfig } from "./alerting.js";
+import type { DrawbridgeScanResult, DrawbridgeScannerConfig, SanitizeConfig, SanitizeResult } from "./scanner.js";
+import type { FrequencyTrackerConfig, FrequencyUpdateResult, EscalationTier } from "./frequency.js";
+import type { BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
+import type { SyntacticFilterConfig, SyntacticFilterResult, TwoPassConfig } from "./validation.js";
+import type { AuditEmitterConfig, TypedAuditEvent } from "./audit.js";
+import type { AlertManagerConfig, AlertPayload } from "./alerting.js";
 import type { ContentSource } from "./common.js";
 
 // Re-export for convenience
@@ -42,32 +38,77 @@ export interface PipelineInput {
 
 /** Full pipeline result */
 export interface PipelineResult {
-  /** Overall safety verdict */
+  /** Overall safety verdict -- false if ANY stage blocked */
   safe: boolean;
+
   /** Was content from a trusted source? (bypassed full inspection) */
   trusted: boolean;
-  /** Scanner result (null if trusted fast-path) */
+
+  /** Pre-filter result (null if trusted fast-path or pre-filter disabled) */
+  preFilterResult: SyntacticFilterResult | null;
+
+  /** Scanner result (null if trusted fast-path, or skipped by two-pass) */
   scanResult: DrawbridgeScanResult | null;
-  /** Pre-filter result (null if not yet implemented) */
-  preFilterResult: PreFilterResult | null;
-  /** Current session escalation tier */
+
+  /** Sanitize result (null if nothing to redact or trusted fast-path) */
+  sanitizeResult: SanitizeResult | null;
+
+  /** Current session escalation tier after this inspection */
   escalationTier: EscalationTier;
+
+  /** Frequency update result (null if tracker disabled or trusted) */
+  frequencyResult: FrequencyUpdateResult | null;
+
+  /** Whether the session is terminated (tier3 reached) */
+  terminated: boolean;
+
   /** Audit events produced during this inspection */
-  auditEvents: AuditEvent[];
+  auditEvents: TypedAuditEvent[];
+
+  /** Alerts fired during this inspection (may be empty) */
+  alerts: AlertPayload[];
+
+  /** Convenience shorthand for sanitizeResult.sanitized */
+  sanitizedContent: string | null;
+
+  /** The content that was inspected (stringified if object) */
+  inspectedContent: string;
 }
 
 /** Full Drawbridge pipeline configuration */
 export interface DrawbridgePipelineConfig {
+  /** Scanner (ClawMoat) config. Omit to use defaults. */
   scanner?: DrawbridgeScannerConfig;
-  frequency?: Partial<FrequencyConfig>;
+
+  /** Injected ClawMoat engine instance (for testing or custom setup) */
+  engine?: unknown;
+
+  /** Frequency tracker config. Omit to use defaults. */
+  frequency?: Partial<FrequencyTrackerConfig>;
+
+  /** Context profile selection. Default: "general" */
   profile?: BuiltInProfileId | CustomProfileDefinition;
-  validation?: {
-    syntactic?: { enabled: boolean; maxPayloadBytes?: number; maxJsonDepth?: number };
-    schema?: { enabled: boolean };
-    twoPass?: Partial<TwoPassConfig>;
+
+  /** Syntactic pre-filter config. Omit to use defaults. */
+  syntactic?: Partial<SyntacticFilterConfig> & { enabled?: boolean };
+
+  /** Two-pass gating config. Default: disabled */
+  twoPass?: Partial<TwoPassConfig>;
+
+  /** Sanitize/redaction config. Omit to use defaults. */
+  sanitize?: Partial<SanitizeConfig> & {
+    /** Whether to redact content. Default: true */
+    enabled?: boolean;
+    /** Redact all findings or only blocking ones. Default: false (blocking only) */
+    redactAll?: boolean;
   };
+
+  /** Audit emitter config. Omit to use defaults. */
   audit?: Partial<AuditEmitterConfig>;
+
+  /** Alert manager config. Omit to use defaults. */
   alerting?: Partial<AlertManagerConfig>;
-  /** MCP servers that bypass full inspection */
+
+  /** MCP servers that bypass full inspection. Default: [] */
   trustedServers?: string[];
 }

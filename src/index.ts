@@ -18,9 +18,12 @@ export { PreFilter } from "./validation/index.js";
 // === v0.4 implemented ===
 export { AuditEmitter, sha256 } from "./audit/index.js";
 
-// === v0.5+ stubs (pipeline modules) ===
+// === v0.5 implemented ===
 export { AlertManager } from "./alerting/index.js";
+
+// === v1.0 implemented ===
 export { DrawbridgePipeline } from "./pipeline/index.js";
+export { safeStringify } from "./lib/safe-stringify.js";
 
 // === Module-specific types ===
 export type {

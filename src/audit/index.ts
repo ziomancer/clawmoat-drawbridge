@@ -318,6 +318,11 @@ export class AuditEmitter {
     return this.errorCount;
   }
 
+  /** Check if this emitter's configured verbosity meets the given tier */
+  meetsVerbosity(required: import("../types/audit.js").AuditVerbosity): boolean {
+    return meetsVerbosity(this.config.verbosity, required);
+  }
+
   /** Reset counters (useful for testing) */
   resetStats(): void {
     this.emitCount = 0;

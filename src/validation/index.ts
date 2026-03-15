@@ -11,6 +11,7 @@
 
 import type { SyntacticFilterConfig, SyntacticFilterResult } from "../types/validation.js";
 import { DEFAULT_SYNTACTIC_CONFIG } from "../types/validation.js";
+import { safeStringify } from "../lib/safe-stringify.js";
 
 // ---------------------------------------------------------------------------
 // Frozen rule set — prevents config-injection on the filter itself
@@ -109,18 +110,6 @@ function measureJsonDepth(value: unknown, current = 0): number {
     }
   }
   return max;
-}
-
-// ---------------------------------------------------------------------------
-// Safe stringify (same as scanner, duplicated to avoid cross-module dep)
-// ---------------------------------------------------------------------------
-
-function safeStringify(content: unknown): string {
-  try {
-    return JSON.stringify(content);
-  } catch {
-    return String(content);
-  }
 }
 
 // ---------------------------------------------------------------------------
