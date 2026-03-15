@@ -16,7 +16,7 @@ export const SEVERITY_RANK: Record<Severity, number> = {
 
 /** Type guard: is this string a valid Severity? */
 export const isSeverity = (value: string): value is Severity =>
-  value in SEVERITY_RANK;
+  Object.prototype.hasOwnProperty.call(SEVERITY_RANK, value);
 
 /** Audit verbosity levels (used by profiles, audit, pipeline) */
 export type AuditVerbosity = "minimal" | "standard" | "high" | "maximum";
