@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <rect width="600" height="400" rx="12" fill="#0B1019"/>
+
+  <!-- Shield + portcullis mark -->
+  <g transform="translate(228, 32)">
+    <!-- Shield body -->
+    <path d="M0,10 Q0,0 10,0 L134,0 Q144,0 144,10 L144,140 Q144,200 72,224 Q0,200 0,140 Z" fill="none" stroke="#4DB8A4" stroke-width="2.8"/>
+    <!-- Inner shield trace -->
+    <path d="M10,14 Q10,8 16,8 L128,8 Q134,8 134,14 L134,136 Q134,190 72,212 Q10,190 10,136 Z" fill="none" stroke="#4DB8A4" stroke-width="0.6" opacity="0.25"/>
+
+    <!-- Arch inside shield -->
+    <path d="M32,136 L32,52 Q32,28 56,28 L88,28 Q112,28 112,52 L112,136" fill="none" stroke="#4DB8A4" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+
+    <!-- Vertical bars with spike tips -->
+    <line x1="52" y1="36" x2="52" y2="130" stroke="#4DB8A4" stroke-width="2.8" stroke-linecap="round"/>
+    <polygon points="52,130 48.5,142 55.5,142" fill="#4DB8A4"/>
+
+    <line x1="72" y1="36" x2="72" y2="140" stroke="#4DB8A4" stroke-width="2.8" stroke-linecap="round"/>
+    <polygon points="72,140 68.5,152 75.5,152" fill="#4DB8A4"/>
+
+    <line x1="92" y1="36" x2="92" y2="130" stroke="#4DB8A4" stroke-width="2.8" stroke-linecap="round"/>
+    <polygon points="92,130 88.5,142 95.5,142" fill="#4DB8A4"/>
+
+    <!-- Horizontal crossbars -->
+    <line x1="38" y1="68" x2="106" y2="68" stroke="#4DB8A4" stroke-width="2" stroke-linecap="round"/>
+    <line x1="38" y1="100" x2="106" y2="100" stroke="#4DB8A4" stroke-width="2" stroke-linecap="round"/>
+
+    <!-- Rivets -->
+    <circle cx="52" cy="68" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+    <circle cx="72" cy="68" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+    <circle cx="92" cy="68" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+    <circle cx="52" cy="100" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+    <circle cx="72" cy="100" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+    <circle cx="92" cy="100" r="2.5" fill="#0B1019" stroke="#4DB8A4" stroke-width="0.8"/>
+
+    <!-- Chain hints -->
+    <ellipse cx="52" cy="30" rx="3" ry="5" fill="none" stroke="#4DB8A4" stroke-width="0.8" opacity="0.35"/>
+    <ellipse cx="92" cy="30" rx="3" ry="5" fill="none" stroke="#4DB8A4" stroke-width="0.8" opacity="0.35"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="300" y="300" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="500" fill="#E4E8EC" letter-spacing="8">DRAWBRIDGE</text>
+  <!-- Accent line -->
+  <line x1="180" y1="320" x2="420" y2="320" stroke="#4DB8A4" stroke-width="1" opacity="0.4"/>
+  <!-- Tagline -->
+  <text x="300" y="345" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="11.5" fill="#4DB8A4" letter-spacing="5" opacity="0.75">SESSION HARDENER</text>
+  <!-- Branding -->
+  <text x="300" y="378" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="9.5" fill="#6B7280" letter-spacing="3">A CLAWMOAT PLUGIN</text>
+</svg>
