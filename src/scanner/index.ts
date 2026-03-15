@@ -14,7 +14,10 @@ import {
   type DrawbridgeScanResult,
   type DrawbridgeFinding,
   type Severity,
+  type SanitizeConfig,
+  type SanitizeResult,
 } from "../types/scanner.js";
+import { sanitizeContent } from "../sanitize/index.js";
 
 /** Normalize a ClawMoat type+subtype into a Drawbridge rule ID. */
 export function normalizeRuleId(type: string, subtype: string): string {
@@ -165,6 +168,19 @@ export class DrawbridgeScanner {
    */
   scanObject(content: unknown): DrawbridgeScanResult {
     return this.scan(safeStringify(content));
+  }
+
+  /**
+   * Scan and sanitize in one call.
+   * Equivalent to scan() followed by sanitizeContent() on blocked findings.
+   */
+  scanAndSanitize(
+    content: string,
+    sanitizeConfig?: Partial<SanitizeConfig> & { redactAll?: boolean },
+  ): DrawbridgeScanResult & { sanitized: SanitizeResult } {
+    const result = this.scan(content);
+    const sanitized = sanitizeContent(content, result.findings, sanitizeConfig);
+    return { ...result, sanitized };
   }
 
   // -----------------------------------------------------------------------

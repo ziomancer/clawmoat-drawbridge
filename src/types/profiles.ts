@@ -50,6 +50,24 @@ export interface ContextProfile {
   auditVerbosityFloor: AuditVerbosity;
 }
 
+/**
+ * Resolved profile — the output of ProfileResolver.
+ * Frozen for the lifetime of the consumer instance.
+ * All optional fields from the profile definition are resolved
+ * to concrete values (merged with base profile defaults).
+ */
+export interface ResolvedProfile {
+  id: string;
+  name: string;
+  baseProfileId: BuiltInProfileId;
+  syntacticEmphasis: SyntacticEmphasis;
+  frequencyWeightOverrides: Record<string, number>;
+  frequencyThresholdOverrides: Partial<{ tier1: number; tier2: number; tier3: number }>;
+  auditVerbosityFloor: AuditVerbosity;
+  /** Schema strictness stored for v1.0 pipeline use */
+  schemaStrictness: SchemaStrictnessConfig;
+}
+
 /** Custom profile definition (loaded from operator-provided JSON file) */
 export interface CustomProfileDefinition {
   id: string;

@@ -5,8 +5,13 @@ export { SEVERITY_RANK, isSeverity } from "./types/common.js";
 // === v0.1 implemented ===
 export { DrawbridgeScanner, normalizeRuleId } from "./scanner/index.js";
 
-// === v0.2+ stubs (pipeline modules) ===
+// === v0.2 implemented ===
 export { FrequencyTracker } from "./frequency/index.js";
+
+// === v0.3 implemented ===
+export { sanitizeContent } from "./sanitize/index.js";
+
+// === v0.3+ stubs (pipeline modules) ===
 export { ProfileResolver } from "./profiles/index.js";
 export { PreFilter } from "./validation/index.js";
 export { AuditEmitter } from "./audit/index.js";
@@ -22,37 +27,49 @@ export type {
   DrawbridgeScannerConfig,
   DrawbridgeScanResult,
   DrawbridgeFinding,
+  // Sanitize (v0.3)
+  SanitizeConfig,
+  SanitizeResult,
 } from "./types/scanner.js";
 
+export { DEFAULT_SANITIZE_CONFIG } from "./types/scanner.js";
+
 export type {
-  // Frequency (v0.2+)
+  // Frequency (v0.2)
   EscalationTier,
   SessionSuspicionState,
   FrequencyConfig,
   FrequencyUpdateResult,
+  FrequencyMemoryConfig,
+  FrequencyTrackerConfig,
 } from "./types/frequency.js";
 
-export { DEFAULT_FREQUENCY_CONFIG } from "./types/frequency.js";
+export { DEFAULT_FREQUENCY_CONFIG, DEFAULT_MEMORY_CONFIG } from "./types/frequency.js";
 
 export type {
-  // Profiles (v0.2+)
+  // Profiles (v0.3)
   BuiltInProfileId,
   SchemaStrictness,
   SchemaStrictnessConfig,
   SyntacticEmphasis,
   ContextProfile,
   CustomProfileDefinition,
+  ResolvedProfile,
 } from "./types/profiles.js";
 
+export { BUILTIN_PROFILES } from "./profiles/builtin.js";
+
 export type {
-  // Validation (v0.2+)
+  // Validation (v0.3)
+  SyntacticFilterConfig,
   SyntacticFilterResult,
   SchemaValidationResult,
   PreFilterResult,
   TwoPassConfig,
 } from "./types/validation.js";
 
-export { DEFAULT_HARD_BLOCK_RULES } from "./types/validation.js";
+export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES } from "./types/validation.js";
+export { SYNTACTIC_RULES, SYNTACTIC_RULE_TAXONOMY } from "./validation/index.js";
 
 export type {
   // Audit (v0.2+)

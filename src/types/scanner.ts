@@ -89,3 +89,42 @@ export interface DrawbridgeFinding {
   /** Which direction this finding came from */
   direction: "inbound" | "outbound";
 }
+
+// --- Sanitize types ---
+
+/** Configuration for content sanitization/redaction */
+export interface SanitizeConfig {
+  /** Replacement string for redacted content. Default: "[REDACTED]" */
+  placeholder: string;
+
+  /**
+   * Whether to include the ruleId in the placeholder.
+   * If true: "[REDACTED:drawbridge.prompt_injection.instruction_override]"
+   * If false: "[REDACTED]"
+   * Default: false
+   */
+  includeRuleId: boolean;
+}
+
+export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
+  placeholder: "[REDACTED]",
+  includeRuleId: false,
+};
+
+/** Result of content sanitization */
+export interface SanitizeResult {
+  /** The redacted content string */
+  sanitized: string;
+
+  /** Number of redactions applied */
+  redactionCount: number;
+
+  /** Total characters removed */
+  charactersRemoved: number;
+
+  /** Rule IDs of findings that caused redactions */
+  redactedRuleIds: string[];
+
+  /** Original content length */
+  originalLength: number;
+}

@@ -3,9 +3,27 @@
  * Both stages run before any semantic/LLM inspection.
  *
  * Spec reference: Input Validation Layers v2.3
- *
- * NOT IMPLEMENTED in v0.1. Types exported for pipeline type stability.
  */
+
+/** Syntactic pre-filter configuration */
+export interface SyntacticFilterConfig {
+  /** Maximum raw payload size in bytes before structural block. Default: 524288 (512KB) */
+  maxPayloadBytes: number;
+  /** Maximum nested JSON depth before structural block. Default: 10 */
+  maxJsonDepth: number;
+  /**
+   * Rule IDs to suppress to flags-only (from profile emphasis).
+   * These rules still produce ruleIds in the output but do not set pass=false.
+   * Does NOT override structural rules (which always fail).
+   */
+  suppressRules: string[];
+}
+
+export const DEFAULT_SYNTACTIC_CONFIG: SyntacticFilterConfig = {
+  maxPayloadBytes: 524_288,
+  maxJsonDepth: 10,
+  suppressRules: [],
+};
 
 /** Syntactic pre-filter result */
 export interface SyntacticFilterResult {
@@ -38,9 +56,9 @@ export interface TwoPassConfig {
   hardBlockRules: string[];
 }
 
-/** Default hard block rules */
+/** Default hard block rules (Drawbridge-prefixed) */
 export const DEFAULT_HARD_BLOCK_RULES = [
-  "injection.ignore-previous",
-  "injection.system-override",
-  "injection.role-switch-capability",
+  "drawbridge.syntactic.injection.ignore-previous",
+  "drawbridge.syntactic.injection.system-override",
+  "drawbridge.syntactic.injection.role-switch-capability",
 ] as const;
