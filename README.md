@@ -1,4 +1,4 @@
-# @vigilharbor/clawmoat-drawbridge-sanitizer
+# @ziomancer/clawmoat-drawbridge
 
 Session-aware content sanitization pipeline powered by [ClawMoat](https://github.com/darfaz/clawmoat).
 Standalone library — wire into any agent pipeline.
