@@ -23,6 +23,7 @@ import type {
   TypedAuditEvent,
   FrequencyAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
 } from "../types/audit.js";
 
 export class AlertManager {
@@ -65,6 +66,10 @@ export class AlertManager {
           ...DEFAULT_ALERT_RULES.frequencyEscalation,
           ...config?.rules?.frequencyEscalation,
           tier3Enabled: true, // ALWAYS true — cannot be disabled
+        },
+        trustedToolSchemaFail: {
+          ...DEFAULT_ALERT_RULES.trustedToolSchemaFail,
+          ...config?.rules?.trustedToolSchemaFail,
         },
       },
       rateLimit: {
@@ -119,7 +124,11 @@ export class AlertManager {
         alert = this.evaluateScanBlockAfterSyntacticPass(event);
         break;
 
-      // write_failed not yet a Drawbridge audit event — writeFailSpike deferred to v1.0
+      case "schema_fail":
+        alert = this.evaluateTrustedToolSchemaFail(event);
+        break;
+
+      // write_failed not yet a Drawbridge audit event — writeFailSpike deferred
     }
 
     // 3. Apply dedup and rate limiting
@@ -274,6 +283,27 @@ export class AlertManager {
         escalateAfter: rule.escalateAfter,
         occurrenceCount: this.rule4Count,
       },
+    });
+  }
+
+  /** Rule 2: Trusted tool schema fail */
+  private evaluateTrustedToolSchemaFail(
+    event: TypedAuditEvent,
+  ): AlertPayload | null {
+    const rule = this.config.rules.trustedToolSchemaFail;
+    if (!rule.enabled) return null;
+
+    const schemaEvent = event as SchemaAuditEvent;
+    if (!schemaEvent.trusted) return null;
+
+    return this.buildAlert({
+      ruleId: "trustedToolSchemaFail",
+      severity: "high",
+      sessionId: event.sessionId,
+      agentId: event.agentId,
+      summary: `Trusted tool ${schemaEvent.serverName}:${schemaEvent.toolName} produced structurally invalid output`,
+      triggeringEvents: [event],
+      ruleConfig: {},
     });
   }
 

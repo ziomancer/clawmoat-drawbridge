@@ -8,7 +8,7 @@
 import type { DrawbridgeScanResult, DrawbridgeScannerConfig, SanitizeConfig, SanitizeResult } from "./scanner.js";
 import type { FrequencyTrackerConfig, FrequencyUpdateResult, EscalationTier } from "./frequency.js";
 import type { BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
-import type { SyntacticFilterConfig, SyntacticFilterResult, TwoPassConfig } from "./validation.js";
+import type { SyntacticFilterConfig, SyntacticFilterResult, SchemaValidationConfig, SchemaValidationResult, TwoPassConfig } from "./validation.js";
 import type { AuditEmitterConfig, TypedAuditEvent } from "./audit.js";
 import type { AlertManagerConfig, AlertPayload } from "./alerting.js";
 import type { ContentSource } from "./common.js";
@@ -46,6 +46,9 @@ export interface PipelineResult {
 
   /** Pre-filter result (null if trusted fast-path or pre-filter disabled) */
   preFilterResult: SyntacticFilterResult | null;
+
+  /** Schema validation result (null if not MCP source or schema validation disabled) */
+  schemaResult: SchemaValidationResult | null;
 
   /** Scanner result (null if trusted fast-path, or skipped by two-pass) */
   scanResult: DrawbridgeScanResult | null;
@@ -91,6 +94,9 @@ export interface DrawbridgePipelineConfig {
 
   /** Syntactic pre-filter config. Omit to use defaults. */
   syntactic?: Partial<SyntacticFilterConfig> & { enabled?: boolean };
+
+  /** Schema validation config. Omit to use defaults (disabled). */
+  schema?: Partial<SchemaValidationConfig>;
 
   /** Two-pass gating config. Default: disabled */
   twoPass?: Partial<TwoPassConfig>;

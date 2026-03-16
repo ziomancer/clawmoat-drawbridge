@@ -23,9 +23,9 @@ export type AuditEventType =
   | "syntactic_pass"
   | "syntactic_fail"
   | "syntactic_flags"
-  // Schema validation events (deferred to v1.0)
-  // | "schema_pass"
-  // | "schema_fail"
+  // Schema validation events
+  | "schema_pass"
+  | "schema_fail"
   // Frequency events
   | "frequency_escalation_tier1"
   | "frequency_escalation_tier2"
@@ -70,9 +70,12 @@ export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = Objec
   profile_loaded: "minimal",
   audit_config_loaded: "minimal",
 
+  schema_fail: "minimal",
+
   // Standard tier — pass events and summaries
   scan_pass: "standard",
   syntactic_pass: "standard",
+  schema_pass: "standard",
   syntactic_flags: "standard",
   flags_summary: "standard",
   content_sanitized: "standard",
@@ -127,6 +130,17 @@ export interface SyntacticAuditEvent extends AuditEvent {
   pass: boolean;
   ruleIds: string[];
   flags: string[];
+}
+
+/** schema_pass / schema_fail */
+export interface SchemaAuditEvent extends AuditEvent {
+  event: "schema_pass" | "schema_fail";
+  pass: boolean;
+  violations: string[];
+  ruleIds: string[];
+  serverName: string;
+  toolName: string;
+  trusted?: boolean;
 }
 
 /** frequency_escalation_tier1/2/3 */
@@ -212,6 +226,7 @@ export interface RawCaptureEvent extends AuditEvent {
 export type TypedAuditEvent =
   | ScanAuditEvent
   | SyntacticAuditEvent
+  | SchemaAuditEvent
   | FrequencyAuditEvent
   | SanitizeAuditEvent
   | ProfileAuditEvent

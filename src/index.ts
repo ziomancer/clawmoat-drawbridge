@@ -13,7 +13,7 @@ export { sanitizeContent } from "./sanitize/index.js";
 
 // === v0.3 implemented ===
 export { ProfileResolver } from "./profiles/index.js";
-export { PreFilter } from "./validation/index.js";
+export { PreFilter, SchemaValidator } from "./validation/index.js";
 
 // === v0.4 implemented ===
 export { AuditEmitter, sha256 } from "./audit/index.js";
@@ -37,6 +37,7 @@ export type {
   // Sanitize (v0.3)
   SanitizeConfig,
   SanitizeResult,
+  RedactionDetail,
 } from "./types/scanner.js";
 
 export { DEFAULT_SANITIZE_CONFIG } from "./types/scanner.js";
@@ -73,9 +74,13 @@ export type {
   SchemaValidationResult,
   PreFilterResult,
   TwoPassConfig,
+  // Schema (v1.1)
+  ToolOutputSchema,
+  FieldSchema,
+  SchemaValidationConfig,
 } from "./types/validation.js";
 
-export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES } from "./types/validation.js";
+export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES, DEFAULT_SCHEMA_CONFIG } from "./types/validation.js";
 export { SYNTACTIC_RULES, SYNTACTIC_RULE_TAXONOMY } from "./validation/index.js";
 
 export type {
@@ -86,6 +91,7 @@ export type {
   TypedAuditEvent,
   ScanAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
   FrequencyAuditEvent,
   SanitizeAuditEvent,
   ProfileAuditEvent,

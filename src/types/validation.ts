@@ -49,6 +49,51 @@ export interface PreFilterResult {
   allRuleIds: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Schema validation types
+// ---------------------------------------------------------------------------
+
+/** Tool output schema declaration */
+export interface ToolOutputSchema {
+  /** Discriminant field name for polymorphic responses (e.g. "type", "status") */
+  discriminant?: string;
+  /** Schema variants keyed by discriminant value. If no discriminant, use a single-key map. */
+  variants: Record<string, FieldSchema>;
+}
+
+/** Field-level schema (simple validation, not full JSON Schema) */
+export interface FieldSchema {
+  /** Required field names */
+  required?: string[];
+  /** Field type expectations: field name → expected type */
+  fields?: Record<string, "string" | "number" | "boolean" | "object" | "array" | "null">;
+  /** Whether extra fields beyond those declared are allowed. Default: false */
+  allowExtra?: boolean;
+}
+
+/** Schema validation configuration */
+export interface SchemaValidationConfig {
+  enabled: boolean;
+  /**
+   * Registered tool schemas. Key is "serverName:toolName".
+   * Used by the pipeline to validate MCP tool results.
+   */
+  toolSchemas: Record<string, ToolOutputSchema>;
+  /**
+   * Default behavior for tools without a registered schema.
+   * "strict" = reject bare primitives, require JSON object/array
+   * "lenient" = accept any JSON value, flag but pass
+   * Default: "strict"
+   */
+  defaultBehavior: "strict" | "lenient";
+}
+
+export const DEFAULT_SCHEMA_CONFIG: SchemaValidationConfig = {
+  enabled: false,
+  toolSchemas: {},
+  defaultBehavior: "strict",
+};
+
 /** Two-pass gating configuration */
 export interface TwoPassConfig {
   enabled: boolean;

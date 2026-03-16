@@ -111,6 +111,22 @@ export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
   includeRuleId: false,
 };
 
+/** Per-redaction detail for audit trail */
+export interface RedactionDetail {
+  /** Rule ID that caused this redaction */
+  ruleId: string;
+  /** Start position in original content */
+  position: number;
+  /** Length of content that was replaced */
+  matchedLength: number;
+  /** SHA-256 hash of the content that was replaced */
+  sha256: string;
+  /** The placeholder that replaced it */
+  replacement: string;
+  /** Whether this used the multi-occurrence fallback */
+  fallback: boolean;
+}
+
 /** Result of content sanitization */
 export interface SanitizeResult {
   /** The redacted content string */
@@ -127,4 +143,10 @@ export interface SanitizeResult {
 
   /** Original content length */
   originalLength: number;
+
+  /** Number of redactions that used multi-occurrence fallback (no reliable position data) */
+  fallbackRedactions: number;
+
+  /** Per-redaction detail for audit trail */
+  redactions: RedactionDetail[];
 }

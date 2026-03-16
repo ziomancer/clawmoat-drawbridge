@@ -9,8 +9,8 @@
  * Spec reference: Input Validation Layers v2.3, §Stage 1A
  */
 
-import type { SyntacticFilterConfig, SyntacticFilterResult } from "../types/validation.js";
-import { DEFAULT_SYNTACTIC_CONFIG } from "../types/validation.js";
+import type { SyntacticFilterConfig, SyntacticFilterResult, SchemaValidationConfig, SchemaValidationResult } from "../types/validation.js";
+import { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_SCHEMA_CONFIG } from "../types/validation.js";
 import { safeStringify } from "../lib/safe-stringify.js";
 
 // ---------------------------------------------------------------------------
@@ -123,9 +123,11 @@ function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
 
 export class PreFilter {
   private readonly config: SyntacticFilterConfig;
+  private readonly schemaValidator: SchemaValidator | null;
 
-  constructor(config?: Partial<SyntacticFilterConfig>) {
+  constructor(config?: Partial<SyntacticFilterConfig>, schemaConfig?: Partial<SchemaValidationConfig>) {
     this.config = { ...DEFAULT_SYNTACTIC_CONFIG, ...config };
+    this.schemaValidator = schemaConfig ? new SchemaValidator(schemaConfig) : null;
 
     const MAX_ALLOWED_DEPTH = 1_000; // 2x cap in measureJsonDepth → max ~2k frames, well within stack
     if (!Number.isFinite(this.config.maxJsonDepth) || this.config.maxJsonDepth <= 0) {
@@ -289,9 +291,166 @@ export class PreFilter {
     return this.run(typeof content === "string" ? content : safeStringify(content));
   }
 
-  // Schema validation: v1.0
+  /** Validate content against a tool's declared output schema */
+  validateSchema(
+    content: unknown,
+    serverName: string,
+    toolName: string,
+  ): SchemaValidationResult {
+    if (!this.schemaValidator) {
+      return { pass: true, violations: [], ruleIds: [] };
+    }
+    return this.schemaValidator.validate(content, serverName, toolName);
+  }
 
   private isSuppressed(ruleId: string): boolean {
     return this.config.suppressRules.includes(ruleId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SchemaValidator
+// ---------------------------------------------------------------------------
+
+function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "array" | "null" {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  return typeof value as "string" | "number" | "boolean" | "object";
+}
+
+export class SchemaValidator {
+  private readonly config: SchemaValidationConfig;
+
+  constructor(config?: Partial<SchemaValidationConfig>) {
+    this.config = { ...DEFAULT_SCHEMA_CONFIG, ...config };
+  }
+
+  validate(
+    content: unknown,
+    serverName: string,
+    toolName: string,
+  ): SchemaValidationResult {
+    if (!this.config.enabled) {
+      return { pass: true, violations: [], ruleIds: [] };
+    }
+
+    const key = `${serverName}:${toolName}`;
+    const schema = this.config.toolSchemas[key];
+
+    // No schema registered — apply defaultBehavior
+    if (!schema) {
+      return this.validateDefault(content);
+    }
+
+    return this.validateAgainstSchema(content, schema);
+  }
+
+  private validateDefault(content: unknown): SchemaValidationResult {
+    if (this.config.defaultBehavior === "lenient") {
+      return { pass: true, violations: [], ruleIds: [] };
+    }
+
+    // strict: content must be object or array
+    const type = jsType(content);
+    if (type !== "object" && type !== "array") {
+      return {
+        pass: false,
+        violations: [`Expected object or array, got ${type}`],
+        ruleIds: ["schema.type-mismatch"],
+      };
+    }
+    return { pass: true, violations: [], ruleIds: [] };
+  }
+
+  private validateAgainstSchema(
+    content: unknown,
+    schema: import("../types/validation.js").ToolOutputSchema,
+  ): SchemaValidationResult {
+    const violations: string[] = [];
+    const ruleIds = new Set<string>();
+
+    // Content must be an object to validate against a schema
+    if (typeof content !== "object" || content === null || Array.isArray(content)) {
+      return {
+        pass: false,
+        violations: [`Expected object, got ${jsType(content)}`],
+        ruleIds: ["schema.type-mismatch"],
+      };
+    }
+
+    const obj = content as Record<string, unknown>;
+
+    // Select variant
+    let variant: import("../types/validation.js").FieldSchema | undefined;
+
+    if (schema.discriminant) {
+      const discriminantValue = obj[schema.discriminant];
+      if (typeof discriminantValue !== "string" || !(discriminantValue in schema.variants)) {
+        const msg = discriminantValue === undefined
+          ? `Missing discriminant field "${schema.discriminant}"`
+          : `Unknown discriminant value "${String(discriminantValue)}" for field "${schema.discriminant}"`;
+        return {
+          pass: false,
+          violations: [msg],
+          ruleIds: ["schema.type-mismatch"],
+        };
+      }
+      variant = schema.variants[discriminantValue];
+    } else {
+      // No discriminant — use single variant (first key)
+      const keys = Object.keys(schema.variants);
+      variant = keys.length > 0 ? schema.variants[keys[0]!] : undefined;
+    }
+
+    if (!variant) {
+      return { pass: true, violations: [], ruleIds: [] };
+    }
+
+    // Check required fields
+    if (variant.required) {
+      for (const field of variant.required) {
+        if (!(field in obj)) {
+          violations.push(`Missing required field "${field}"`);
+          ruleIds.add("schema.missing-field");
+        }
+      }
+    }
+
+    // Check field types
+    if (variant.fields) {
+      for (const [field, expectedType] of Object.entries(variant.fields)) {
+        if (field in obj) {
+          const actualType = jsType(obj[field]);
+          if (actualType !== expectedType) {
+            violations.push(`Field "${field}" expected ${expectedType}, got ${actualType}`);
+            ruleIds.add("schema.type-mismatch");
+          }
+        }
+      }
+    }
+
+    // Check extra fields
+    if (variant.allowExtra !== true) {
+      const declaredFields = new Set<string>([
+        ...(variant.required ?? []),
+        ...Object.keys(variant.fields ?? {}),
+      ]);
+      if (schema.discriminant) {
+        declaredFields.add(schema.discriminant);
+      }
+      for (const field of Object.keys(obj)) {
+        if (!declaredFields.has(field)) {
+          violations.push(`Unexpected field "${field}"`);
+          ruleIds.add("schema.extra-field");
+        }
+      }
+    }
+
+    const ruleIdArray = [...ruleIds];
+    return {
+      pass: ruleIdArray.length === 0,
+      violations,
+      ruleIds: ruleIdArray,
+    };
   }
 }

@@ -6,8 +6,10 @@
  * will feed findings from both stages into sanitizeContent().
  */
 
+import { createHash } from "node:crypto";
 import type {
   DrawbridgeFinding,
+  RedactionDetail,
   SanitizeConfig,
   SanitizeResult,
 } from "../types/scanner.js";
@@ -20,10 +22,15 @@ interface RedactionRange {
   end: number;
   ruleId: string;
   severityRank: number;
+  fallback: boolean;
 }
 
 function severityRank(severity: string): number {
   return isSeverity(severity) ? SEVERITY_RANK[severity] : SEVERITY_RANK.critical;
+}
+
+function sha256(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /**
@@ -46,21 +53,23 @@ export function sanitizeContent(
   const mergedConfig = { ...DEFAULT_SANITIZE_CONFIG, ...config };
   const redactAll = config?.redactAll ?? false;
 
+  const empty: SanitizeResult = {
+    sanitized: content,
+    redactionCount: 0,
+    charactersRemoved: 0,
+    redactedRuleIds: [],
+    originalLength: content.length,
+    fallbackRedactions: 0,
+    redactions: [],
+  };
+
   // 1. Select findings to redact
   const selected = findings.filter((f) => redactAll || f.blocked);
-
-  if (selected.length === 0) {
-    return {
-      sanitized: content,
-      redactionCount: 0,
-      charactersRemoved: 0,
-      redactedRuleIds: [],
-      originalLength: content.length,
-    };
-  }
+  if (selected.length === 0) return empty;
 
   // 2. Build replacement ranges
   const ranges: RedactionRange[] = [];
+  let fallbackRedactions = 0;
   for (const finding of selected) {
     const matched = finding.source.matched;
     if (!matched) continue;
@@ -73,6 +82,7 @@ export function sanitizeContent(
         end: Math.min(finding.source.position + matched.length, content.length),
         ruleId: finding.ruleId,
         severityRank: severityRank(finding.source.severity),
+        fallback: false,
       });
     } else {
       // Position is bad (wrong, negative, out-of-bounds). For a content-filtering
@@ -89,22 +99,16 @@ export function sanitizeContent(
           end: Math.min(idx + matched.length, content.length),
           ruleId: finding.ruleId,
           severityRank: severityRank(finding.source.severity),
+          fallback: true,
         });
         searchFrom = idx + matched.length;
         fallbackCount++;
+        fallbackRedactions++;
       }
     }
   }
 
-  if (ranges.length === 0) {
-    return {
-      sanitized: content,
-      redactionCount: 0,
-      charactersRemoved: 0,
-      redactedRuleIds: [],
-      originalLength: content.length,
-    };
-  }
+  if (ranges.length === 0) return empty;
 
   // 3. Sort by start position ascending for merge
   ranges.sort((a, b) => a.start - b.start);
@@ -122,6 +126,8 @@ export function sanitizeContent(
         last.ruleId = current.ruleId;
         last.severityRank = current.severityRank;
       }
+      // If any contributing range was a fallback, mark merged as fallback
+      if (current.fallback) last.fallback = true;
     } else {
       merged.push(current);
     }
@@ -131,6 +137,7 @@ export function sanitizeContent(
   let result = content;
   let charactersRemoved = 0;
   const redactedRuleIds = new Set<string>();
+  const redactions: RedactionDetail[] = [];
 
   for (let i = merged.length - 1; i >= 0; i--) {
     const range = merged[i]!;
@@ -139,10 +146,24 @@ export function sanitizeContent(
       : mergedConfig.placeholder;
 
     const removed = range.end - range.start;
+    const removedContent = content.slice(range.start, range.end);
     charactersRemoved += removed;
     redactedRuleIds.add(range.ruleId);
+
+    redactions.push({
+      ruleId: range.ruleId,
+      position: range.start,
+      matchedLength: removed,
+      sha256: sha256(removedContent),
+      replacement: placeholder,
+      fallback: range.fallback,
+    });
+
     result = result.slice(0, range.start) + placeholder + result.slice(range.end);
   }
+
+  // Reverse so redactions are in ascending position order
+  redactions.reverse();
 
   return {
     sanitized: result,
@@ -150,5 +171,7 @@ export function sanitizeContent(
     charactersRemoved,
     redactedRuleIds: [...redactedRuleIds],
     originalLength: content.length,
+    fallbackRedactions,
+    redactions,
   };
 }

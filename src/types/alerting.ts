@@ -24,8 +24,8 @@ export type AlertRuleId =
   | "frequencyEscalationTier2"
   | "frequencyEscalationTier3"
   | "scanBlockAfterSyntacticPass"
-  | "writeFailSpike";
-// trustedToolSchemaFail deferred to v1.0
+  | "writeFailSpike"
+  | "trustedToolSchemaFail";
 
 /** Alert payload delivered to consumers */
 export interface AlertPayload {
@@ -88,6 +88,9 @@ export interface AlertRuleConfigs {
     /** Time window in minutes. Default: 5 */
     windowMinutes: number;
   };
+  trustedToolSchemaFail: {
+    enabled: boolean;
+  };
 }
 
 /** Alert manager configuration */
@@ -141,6 +144,9 @@ export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
     enabled: true,
     count: 3,
     windowMinutes: 5,
+  },
+  trustedToolSchemaFail: {
+    enabled: true,
   },
 };
 

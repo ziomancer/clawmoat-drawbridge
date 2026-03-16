@@ -117,13 +117,12 @@ export class DrawbridgeScanner {
       const ruleId = normalizeRuleId(finding.type, finding.subtype);
       const sev = effectiveSeverity(finding.severity);
 
-      // NOTE (v1.0): `source` holds a direct reference to the ClawMoat finding object.
-      // Consumer callbacks that mutate finding.source will affect downstream sanitization.
-      // Deep-cloning here would add overhead on the hot path. Accepted tradeoff for v1.0;
-      // v1.1 may freeze the source or copy on construction.
+      // Shallow-copy the ClawMoat finding so callback mutations can't corrupt
+      // downstream sanitization. ClawMoatFinding has only primitive fields
+      // (string, number), so shallow copy is a full copy.
       const enriched: DrawbridgeFinding = {
         ruleId,
-        source: finding,
+        source: { ...finding },
         blocked,
         description: `${finding.type}/${finding.subtype} (${sev}): "${finding.matched}"`,
         direction,
@@ -132,7 +131,9 @@ export class DrawbridgeScanner {
       findings.push(enriched);
       if (blocked) blockingFindings.push(enriched);
       try {
-        this.config.onFinding?.(enriched);
+        // Pass a defensive copy to the callback so mutations can't corrupt
+        // the finding stored in findings/blockingFindings.
+        this.config.onFinding?.({ ...enriched, source: { ...enriched.source } });
       } catch {
         // Consumer callbacks must never break internal state
       }

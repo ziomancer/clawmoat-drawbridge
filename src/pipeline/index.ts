@@ -22,7 +22,7 @@
 
 import { DrawbridgeScanner } from "../scanner/index.js";
 import { FrequencyTracker } from "../frequency/index.js";
-import { PreFilter } from "../validation/index.js";
+import { PreFilter, SchemaValidator } from "../validation/index.js";
 import { ProfileResolver } from "../profiles/index.js";
 import { AuditEmitter } from "../audit/index.js";
 import { AlertManager } from "../alerting/index.js";
@@ -36,9 +36,9 @@ import type {
 } from "../types/pipeline.js";
 import type { TypedAuditEvent } from "../types/audit.js";
 import type { AlertPayload } from "../types/alerting.js";
-import type { SyntacticFilterResult } from "../types/validation.js";
+import type { SyntacticFilterResult, SchemaValidationResult } from "../types/validation.js";
 import type { DrawbridgeScanResult, SanitizeResult } from "../types/scanner.js";
-import type { FrequencyUpdateResult, EscalationTier } from "../types/frequency.js";
+import type { FrequencyUpdateResult, EscalationTier, SessionSuspicionState } from "../types/frequency.js";
 import type { ResolvedProfile } from "../types/profiles.js";
 import { DEFAULT_HARD_BLOCK_RULES } from "../types/validation.js";
 
@@ -46,6 +46,7 @@ export class DrawbridgePipeline {
   private readonly scanner: DrawbridgeScanner;
   private readonly tracker: FrequencyTracker;
   private readonly preFilter: PreFilter;
+  private readonly schemaValidator: SchemaValidator | null;
   private readonly profile: ProfileResolver;
   private readonly auditor: AuditEmitter;
   private readonly alerter: AlertManager;
@@ -86,6 +87,11 @@ export class DrawbridgePipeline {
     this.syntacticEnabled = cfg.syntactic?.enabled !== false;
     const syntacticConfig = this.profile.applySyntacticConfig(cfg.syntactic);
     this.preFilter = new PreFilter(syntacticConfig);
+
+    // 2b. Schema validator (if config provided)
+    this.schemaValidator = cfg.schema
+      ? new SchemaValidator(cfg.schema)
+      : null;
 
     // 3. Build frequency tracker config (profile applies weight/threshold overrides)
     const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
@@ -177,7 +183,7 @@ export class DrawbridgePipeline {
     // --- Trust check ---
     const trustTier = this.resolveTrust(input);
     if (trustTier === "trusted") {
-      return this.trustedFastPath(content, events, alerts, auditParams);
+      return this.trustedFastPath(content, input, events, alerts, auditParams);
     }
 
     // --- Check for terminated session ---
@@ -240,6 +246,42 @@ export class DrawbridgePipeline {
       }
     }
 
+    // --- Stage 1b: Schema validation (MCP sources only) ---
+    let schemaResult: SchemaValidationResult | null = null;
+
+    if (this.schemaValidator && input.source === "mcp" && input.serverName && input.toolName) {
+      const parsedContent = typeof input.content === "string" ? undefined : input.content;
+      // Schema validation operates on the raw object, not stringified content
+      // If content is a string, try to parse it as JSON for schema validation
+      const contentForSchema = parsedContent ?? (() => {
+        try { return JSON.parse(content); } catch { return content; }
+      })();
+
+      schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
+
+      const trusted = this._trustedServers.includes(input.serverName);
+
+      // Audit: schema result
+      this.routeEvent(
+        this.auditor.emitSchema({
+          ...auditParams,
+          pass: schemaResult.pass,
+          violations: schemaResult.violations,
+          ruleIds: schemaResult.ruleIds,
+          serverName: input.serverName,
+          toolName: input.toolName,
+          trusted,
+        }),
+        events,
+        alerts,
+      );
+
+      // Feed schema ruleIds into frequency tracker
+      if (schemaResult.ruleIds.length > 0) {
+        preFilterRuleIds = [...preFilterRuleIds, ...schemaResult.ruleIds];
+      }
+    }
+
     // --- Frequency update: pre-filter findings ---
     // Intentional: both stages contribute to suspicion -- defense in depth
     let frequencyResult: FrequencyUpdateResult | null = null;
@@ -256,6 +298,7 @@ export class DrawbridgePipeline {
           safe: false,
           trusted: false,
           preFilterResult,
+          schemaResult,
           scanResult: null,
           sanitizeResult: null,
           escalationTier: "tier3",
@@ -378,8 +421,29 @@ export class DrawbridgePipeline {
           alerts,
         );
 
-        // Clarification #7: skip output_diff in v1.0
-        // TODO v1.1: output_diff with per-redaction position and hash data
+        // Emit output_diff at high verbosity with per-redaction data
+        if (sanitizeResult.redactions.length > 0) {
+          this.routeEvent(
+            this.auditor.emitOutputDiff({
+              ...auditParams,
+              removals: sanitizeResult.redactions
+                .filter(r => r.matchedLength > 0)
+                .map(r => ({
+                  ruleId: r.ruleId,
+                  matchedLength: r.matchedLength,
+                  sha256: r.sha256,
+                })),
+              replacements: sanitizeResult.redactions.map(r => ({
+                ruleId: r.ruleId,
+                lengthBefore: r.matchedLength,
+                lengthAfter: r.replacement.length,
+                sha256Before: r.sha256,
+              })),
+            }),
+            events,
+            alerts,
+          );
+        }
       }
     }
 
@@ -417,6 +481,7 @@ export class DrawbridgePipeline {
       safe,
       trusted: false,
       preFilterResult,
+      schemaResult,
       scanResult,
       sanitizeResult,
       escalationTier,
@@ -433,40 +498,32 @@ export class DrawbridgePipeline {
   // Public API: module access
   // ---------------------------------------------------------------------------
 
-  /**
-   * Access the underlying scanner.
-   *
-   * **Caveat (v1.0):** Returns a mutable reference to the live instance.
-   * Modifications affect pipeline behavior. Treat as read-only unless you
-   * understand the implications. v1.1 may freeze or proxy these accessors.
-   */
-  get scannerModule(): DrawbridgeScanner {
-    return this.scanner;
-  }
-
-  /** Access the underlying frequency tracker. See scannerModule caveat re: mutability. */
-  get frequencyModule(): FrequencyTracker {
-    return this.tracker;
-  }
-
-  /** Access the underlying pre-filter. See scannerModule caveat re: mutability. */
-  get preFilterModule(): PreFilter {
-    return this.preFilter;
-  }
-
-  /** Access the resolved profile */
+  /** Access the resolved profile (frozen, safe to expose) */
   get resolvedProfile(): ResolvedProfile {
     return this.profile.profile;
   }
 
-  /** Access the audit emitter. See scannerModule caveat re: mutability. */
-  get auditModule(): AuditEmitter {
-    return this.auditor;
+  /** Get a session's current frequency state (returns snapshot, not reference) */
+  getSessionState(sessionId: string): SessionSuspicionState | null {
+    return this.tracker.getState(sessionId);
   }
 
-  /** Access the alert manager. See scannerModule caveat re: mutability. */
-  get alertModule(): AlertManager {
-    return this.alerter;
+  /** Get audit stats (emitted, dropped, errors) */
+  getAuditStats(): { emitted: number; dropped: number; errors: number } {
+    return {
+      emitted: this.auditor.emitted,
+      dropped: this.auditor.dropped,
+      errors: this.auditor.errors,
+    };
+  }
+
+  /** Get alert stats */
+  getAlertStats(): { alerts: number; suppressed: number; rateLimited: number } {
+    return {
+      alerts: this.alerter.alerts,
+      suppressed: this.alerter.suppressed,
+      rateLimited: this.alerter.rateLimited,
+    };
   }
 
   /** Reset a session's frequency state */
@@ -499,13 +556,39 @@ export class DrawbridgePipeline {
       : "untrusted";
   }
 
-  /** Fast path for trusted MCP servers */
+  /** Fast path for trusted MCP servers — still runs schema validation */
   private trustedFastPath(
     content: string,
+    input: PipelineInput,
     events: TypedAuditEvent[],
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
   ): PipelineResult {
+    // Schema validation still runs on trusted servers (Alert Rule 2)
+    let schemaResult: SchemaValidationResult | null = null;
+    if (this.schemaValidator && input.source === "mcp" && input.serverName && input.toolName) {
+      const parsedContent = typeof input.content === "string" ? undefined : input.content;
+      const contentForSchema = parsedContent ?? (() => {
+        try { return JSON.parse(content); } catch { return content; }
+      })();
+
+      schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
+
+      this.routeEvent(
+        this.auditor.emitSchema({
+          ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
+          pass: schemaResult.pass,
+          violations: schemaResult.violations,
+          ruleIds: schemaResult.ruleIds,
+          serverName: input.serverName,
+          toolName: input.toolName,
+          trusted: true,
+        }),
+        events,
+        alerts,
+      );
+    }
+
     this.routeEvent(
       this.auditor.emitScan({
         ...(auditParams as Parameters<AuditEmitter["emitScan"]>[0]),
@@ -522,6 +605,7 @@ export class DrawbridgePipeline {
       safe: true,
       trusted: true,
       preFilterResult: null,
+      schemaResult,
       scanResult: null,
       sanitizeResult: null,
       escalationTier: "none",
@@ -559,6 +643,7 @@ export class DrawbridgePipeline {
       safe: false,
       trusted: false,
       preFilterResult: null,
+      schemaResult: null,
       scanResult: null,
       sanitizeResult: null,
       escalationTier: "tier3",

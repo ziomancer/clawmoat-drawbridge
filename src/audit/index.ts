@@ -16,6 +16,7 @@ import type {
   TypedAuditEvent,
   ScanAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
   FrequencyAuditEvent,
   SanitizeAuditEvent,
   ProfileAuditEvent,
@@ -142,6 +143,27 @@ export class AuditEmitter {
     const event: SyntacticAuditEvent = {
       ...rest,
       event: eventType,
+      timestamp: new Date().toISOString(),
+    };
+    return this.emit(event) ? event : null;
+  }
+
+  /** Emit a schema validation result event */
+  emitSchema(params: {
+    sessionId: string;
+    pass: boolean;
+    violations: string[];
+    ruleIds: string[];
+    serverName: string;
+    toolName: string;
+    trusted?: boolean;
+    messageId?: string;
+    agentId?: string;
+    profile?: string;
+  }): SchemaAuditEvent | null {
+    const event: SchemaAuditEvent = {
+      ...params,
+      event: params.pass ? "schema_pass" : "schema_fail",
       timestamp: new Date().toISOString(),
     };
     return this.emit(event) ? event : null;
