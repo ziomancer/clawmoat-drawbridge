@@ -721,7 +721,26 @@ export class DrawbridgePipeline {
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
   ): SchemaValidationResult | null {
-    if (!this.schemaValidator || input.source !== "mcp" || !input.serverName || !input.toolName) {
+    if (!this.schemaValidator || input.source !== "mcp") {
+      return null;
+    }
+
+    // MCP source but missing identifiers — emit a misconfiguration signal
+    // rather than silently skipping schema validation.
+    if (!input.serverName || !input.toolName) {
+      this.routeEvent(
+        this.auditor.emitSchema({
+          ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
+          pass: false,
+          violations: ["MCP source is missing serverName or toolName — schema validation skipped"],
+          ruleIds: ["schema.invalid-key"],
+          serverName: input.serverName ?? "<unknown>",
+          toolName: input.toolName ?? "<unknown>",
+          trusted: false,
+        }),
+        events,
+        alerts,
+      );
       return null;
     }
 

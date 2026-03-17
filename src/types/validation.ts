@@ -37,6 +37,17 @@ export interface SyntacticFilterResult {
 export interface SchemaValidationResult {
   pass: boolean;
   violations: string[];
+  /**
+   * Rule IDs associated with this result.
+   *
+   * On **fail** events these identify which rules caused the failure
+   * (e.g. `"schema.missing-field"`, `"schema.type-mismatch"`).
+   *
+   * On **pass** events this may contain informational IDs such as
+   * `"schema.no-schema-registered"` to indicate no schema was matched —
+   * consumers should not treat a non-empty array as an error signal
+   * without also checking `pass`.
+   */
   ruleIds: string[];
 }
 

@@ -459,19 +459,21 @@ export class SchemaValidator {
     // Check required fields — reject both absent keys and keys set to undefined
     // (JSON-parsed objects never have undefined values, but raw JS objects passed
     // via input.content can)
+    const missingFields = new Set<string>();
     if (variant.required) {
       for (const field of variant.required) {
         if (!Object.hasOwn(obj, field) || obj[field] === undefined) {
           violations.push(`Missing required field "${field}"`);
           ruleIds.add("schema.missing-field");
+          missingFields.add(field);
         }
       }
     }
 
-    // Check field types
+    // Check field types (skip fields already flagged as missing to avoid double-violation)
     if (variant.fields) {
       for (const [field, expectedType] of Object.entries(variant.fields)) {
-        if (Object.hasOwn(obj, field)) {
+        if (Object.hasOwn(obj, field) && !missingFields.has(field)) {
           const actualType = jsType(obj[field]);
           if (actualType !== expectedType) {
             violations.push(`Field "${field}" expected ${expectedType}, got ${actualType}`);
