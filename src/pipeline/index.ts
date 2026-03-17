@@ -415,7 +415,7 @@ export class DrawbridgePipeline {
                   ruleId: r.ruleId,
                   position: r.position,
                   matchedLength: r.matchedLength,
-                  contentHash: r.sha256,
+                  contentHash: r.contentHash,
                   fallback: r.fallback,
                 })),
               replacements: sanitizeResult.redactions.map(r => ({

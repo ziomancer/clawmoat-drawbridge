@@ -156,6 +156,7 @@ export class AuditEmitter {
     trusted?: boolean;
     messageId?: string;
     agentId?: string;
+    toolCallId?: string;
     profile?: string;
   }): SchemaAuditEvent | null {
     const event: SchemaAuditEvent = {

@@ -160,7 +160,7 @@ export function sanitizeContent(
       ruleId: range.ruleId,
       position: range.start,
       matchedLength: removed,
-      sha256: computeRedactionHash(removedContent, mergedConfig),
+      contentHash: computeRedactionHash(removedContent, mergedConfig),
       replacement: placeholder,
       fallback: range.fallback,
     });

@@ -135,8 +135,8 @@ export interface RedactionDetail {
   position: number;
   /** Length of content that was replaced */
   matchedLength: number;
-  /** HMAC-SHA256 hash of the replaced content (if hashRedactions + hmacKey configured), otherwise empty string */
-  sha256: string;
+  /** HMAC-SHA256 of the replaced content (if hashRedactions + hmacKey configured), otherwise empty string */
+  contentHash: string;
   /** The placeholder that replaced it */
   replacement: string;
   /** Whether this used the multi-occurrence fallback */

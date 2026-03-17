@@ -460,7 +460,7 @@ describe("sanitizeContent — scanner integration", () => {
 
 describe("sanitizeContent — RedactionDetail", () => {
   // 16. Single redaction → correct detail fields (default: no hash)
-  it("single redaction has correct position, matchedLength, sha256, replacement", () => {
+  it("single redaction has correct position, matchedLength, contentHash, replacement", () => {
     const content = "the secret token is here";
     const findings = [
       makeFinding({ ruleId: "r.secret", matched: "secret token", position: 4 }),
@@ -472,7 +472,7 @@ describe("sanitizeContent — RedactionDetail", () => {
     expect(detail.ruleId).toBe("r.secret");
     expect(detail.position).toBe(4);
     expect(detail.matchedLength).toBe(12); // "secret token".length
-    expect(detail.sha256).toBe("");
+    expect(detail.contentHash).toBe("");
     expect(detail.replacement).toBe("[REDACTED]");
     expect(detail.fallback).toBe(false);
   });
@@ -490,10 +490,10 @@ describe("sanitizeContent — RedactionDetail", () => {
     // Redactions are in ascending position order
     expect(result.redactions[0]!.ruleId).toBe("r.a");
     expect(result.redactions[0]!.position).toBe(0);
-    expect(result.redactions[0]!.sha256).toBe("");
+    expect(result.redactions[0]!.contentHash).toBe("");
     expect(result.redactions[1]!.ruleId).toBe("r.c");
     expect(result.redactions[1]!.position).toBe(8);
-    expect(result.redactions[1]!.sha256).toBe("");
+    expect(result.redactions[1]!.contentHash).toBe("");
   });
 
   // 18. Fallback redaction → fallback: true, position reflects indexOf
@@ -509,18 +509,18 @@ describe("sanitizeContent — RedactionDetail", () => {
     expect(detail.fallback).toBe(true);
     expect(detail.position).toBe(4); // "the ".length = 4
     expect(detail.matchedLength).toBe(10);
-    expect(detail.sha256).toBe("");
+    expect(detail.contentHash).toBe("");
   });
 
-  // 19. Default config → sha256 is empty (no bare hashes)
-  it("default config produces empty sha256 — no bare hashes emitted", () => {
+  // 19. Default config → contentHash is empty (no bare hashes)
+  it("default config produces empty contentHash — no bare hashes emitted", () => {
     const content = "remove this secret";
     const findings = [
       makeFinding({ ruleId: "r.a", matched: "secret", position: 12 }),
     ];
     const result = sanitizeContent(content, findings);
 
-    expect(result.redactions[0]!.sha256).toBe("");
+    expect(result.redactions[0]!.contentHash).toBe("");
   });
 
   // 20. Overlapping findings merged → single RedactionDetail spanning merged range
@@ -538,7 +538,7 @@ describe("sanitizeContent — RedactionDetail", () => {
     expect(detail.ruleId).toBe("r.second");
     expect(detail.position).toBe(0);
     expect(detail.matchedLength).toBe(8); // "ABCDEFGH"
-    expect(detail.sha256).toBe("");
+    expect(detail.contentHash).toBe("");
   });
 });
 
@@ -549,32 +549,32 @@ describe("sanitizeContent — RedactionDetail", () => {
 describe("sanitizeContent — HMAC redaction hashing", () => {
   const hmacConfig = { hashRedactions: true, hmacKey: "test-secret-key" };
 
-  // 21. Default config → sha256 is empty string
-  it("21. default config → redactions[].sha256 is empty string", () => {
+  // 21. Default config → contentHash is empty string
+  it("21. default config → redactions[].contentHash is empty string", () => {
     const content = "the secret is here";
     const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
     const result = sanitizeContent(content, findings);
 
-    expect(result.redactions[0]!.sha256).toBe("");
+    expect(result.redactions[0]!.contentHash).toBe("");
   });
 
-  // 22. hashRedactions: true without hmacKey → sha256 is empty string (safe fallback)
-  it("22. hashRedactions without hmacKey → sha256 is empty string", () => {
+  // 22. hashRedactions: true without hmacKey → contentHash is empty string (safe fallback)
+  it("22. hashRedactions without hmacKey → contentHash is empty string", () => {
     const content = "the secret is here";
     const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
     const result = sanitizeContent(content, findings, { hashRedactions: true });
 
-    expect(result.redactions[0]!.sha256).toBe("");
+    expect(result.redactions[0]!.contentHash).toBe("");
   });
 
-  // 23. hashRedactions: true with hmacKey → sha256 is valid HMAC hex string
-  it("23. hashRedactions + hmacKey → sha256 is valid HMAC hex", () => {
+  // 23. hashRedactions: true with hmacKey → contentHash is valid HMAC hex string
+  it("23. hashRedactions + hmacKey → contentHash is valid HMAC hex", () => {
     const content = "the secret is here";
     const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
     const result = sanitizeContent(content, findings, hmacConfig);
 
-    expect(result.redactions[0]!.sha256).toMatch(/^[0-9a-f]{64}$/);
-    expect(result.redactions[0]!.sha256).toBe(expectedHmac("secret", "test-secret-key"));
+    expect(result.redactions[0]!.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.redactions[0]!.contentHash).toBe(expectedHmac("secret", "test-secret-key"));
   });
 
   // 24. Same content + same key → same HMAC (deterministic for correlation)
@@ -584,7 +584,7 @@ describe("sanitizeContent — HMAC redaction hashing", () => {
     const result1 = sanitizeContent(content, findings, hmacConfig);
     const result2 = sanitizeContent(content, findings, hmacConfig);
 
-    expect(result1.redactions[0]!.sha256).toBe(result2.redactions[0]!.sha256);
+    expect(result1.redactions[0]!.contentHash).toBe(result2.redactions[0]!.contentHash);
   });
 
   // 25. Same content + different key → different HMAC (key matters)
@@ -594,7 +594,7 @@ describe("sanitizeContent — HMAC redaction hashing", () => {
     const result1 = sanitizeContent(content, findings, { hashRedactions: true, hmacKey: "key-A" });
     const result2 = sanitizeContent(content, findings, { hashRedactions: true, hmacKey: "key-B" });
 
-    expect(result1.redactions[0]!.sha256).not.toBe(result2.redactions[0]!.sha256);
+    expect(result1.redactions[0]!.contentHash).not.toBe(result2.redactions[0]!.contentHash);
   });
 
   // 26. HMAC value differs from bare SHA-256 (not brute-forceable without key)
@@ -603,6 +603,6 @@ describe("sanitizeContent — HMAC redaction hashing", () => {
     const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
     const result = sanitizeContent(content, findings, hmacConfig);
 
-    expect(result.redactions[0]!.sha256).not.toBe(expectedSha256("secret"));
+    expect(result.redactions[0]!.contentHash).not.toBe(expectedSha256("secret"));
   });
 });
