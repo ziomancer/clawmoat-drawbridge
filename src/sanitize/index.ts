@@ -6,7 +6,7 @@
  * will feed findings from both stages into sanitizeContent().
  */
 
-import { sha256 } from "../lib/sha256.js";
+import { createHmac } from "node:crypto";
 import type {
   DrawbridgeFinding,
   RedactionDetail,
@@ -15,6 +15,12 @@ import type {
 } from "../types/scanner.js";
 import { SEVERITY_RANK, isSeverity } from "../types/common.js";
 import { DEFAULT_SANITIZE_CONFIG } from "../types/scanner.js";
+
+/** Compute redaction hash: HMAC-SHA256 if configured, empty string otherwise. */
+function computeRedactionHash(content: string, config: SanitizeConfig): string {
+  if (!config.hashRedactions || !config.hmacKey) return "";
+  return createHmac("sha256", config.hmacKey).update(content).digest("hex");
+}
 
 /** Internal range for replacement planning */
 interface RedactionRange {
@@ -148,7 +154,7 @@ export function sanitizeContent(
       ruleId: range.ruleId,
       position: range.start,
       matchedLength: removed,
-      sha256: sha256(removedContent),
+      sha256: computeRedactionHash(removedContent, mergedConfig),
       replacement: placeholder,
       fallback: range.fallback,
     });

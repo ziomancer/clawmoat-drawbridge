@@ -104,6 +104,15 @@ export interface SanitizeConfig {
    * Default: false
    */
   includeRuleId: boolean;
+
+  /** Whether to include content hashes in redaction details. Default: false */
+  hashRedactions?: boolean;
+
+  /**
+   * HMAC key for redaction hashes. Required if hashRedactions is true.
+   * Without a key, hashes are omitted entirely — no bare SHA-256.
+   */
+  hmacKey?: string;
 }
 
 /** Default sanitize/redaction configuration */
@@ -120,7 +129,7 @@ export interface RedactionDetail {
   position: number;
   /** Length of content that was replaced */
   matchedLength: number;
-  /** SHA-256 hash of the content that was replaced */
+  /** HMAC-SHA256 hash of the replaced content (if hashRedactions + hmacKey configured), otherwise empty string */
   sha256: string;
   /** The placeholder that replaced it */
   replacement: string;
