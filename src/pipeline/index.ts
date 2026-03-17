@@ -58,6 +58,8 @@ export class DrawbridgePipeline {
     redactAll: boolean;
     placeholder: string;
     includeRuleId: boolean;
+    hashRedactions: boolean;
+    hmacKey: string | undefined;
   };
   private readonly syntacticEnabled: boolean;
 
@@ -111,6 +113,8 @@ export class DrawbridgePipeline {
       redactAll: cfg.sanitize?.redactAll ?? false,
       placeholder: cfg.sanitize?.placeholder ?? "[REDACTED]",
       includeRuleId: cfg.sanitize?.includeRuleId ?? false,
+      hashRedactions: cfg.sanitize?.hashRedactions ?? false,
+      hmacKey: cfg.sanitize?.hmacKey,
     };
 
     // 6. Two-pass config
@@ -378,6 +382,8 @@ export class DrawbridgePipeline {
         placeholder: this._sanitize.placeholder,
         includeRuleId: this._sanitize.includeRuleId,
         redactAll: this._sanitize.redactAll,
+        hashRedactions: this._sanitize.hashRedactions,
+        hmacKey: this._sanitize.hmacKey,
       });
       sanitizedContent = sanitizeResult.sanitized;
 
