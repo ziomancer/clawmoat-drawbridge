@@ -293,13 +293,18 @@ export class PreFilter {
     return this.run(typeof content === "string" ? content : safeStringify(content));
   }
 
-  /** Validate content against a tool's declared output schema */
+  /**
+   * Validate content against a tool's declared output schema.
+   * Returns `pass: true` with empty violations if no `schemaConfig` was provided
+   * to the PreFilter constructor — schema validation is not performed.
+   */
   validateSchema(
     content: unknown,
     serverName: string,
     toolName: string,
   ): SchemaValidationResult {
     if (!this.schemaValidator) {
+      // Schema validation not configured — pass without validation
       return { pass: true, violations: [], ruleIds: [] };
     }
     return this.schemaValidator.validate(content, serverName, toolName);
@@ -338,6 +343,16 @@ export class SchemaValidator {
   ): SchemaValidationResult {
     if (!this.config.enabled) {
       return { pass: true, violations: [], ruleIds: [] };
+    }
+
+    if (serverName.includes(":") || toolName.includes(":")) {
+      return {
+        pass: false,
+        violations: [
+          `Invalid schema lookup: serverName or toolName contains ":" which collides with the composite key separator`,
+        ],
+        ruleIds: ["schema.invalid-key"],
+      };
     }
 
     const key = `${serverName}:${toolName}`;
