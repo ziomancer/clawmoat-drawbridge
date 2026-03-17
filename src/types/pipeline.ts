@@ -13,7 +13,7 @@ import type { AuditEmitterConfig, TypedAuditEvent } from "./audit.js";
 import type { AlertManagerConfig, AlertPayload } from "./alerting.js";
 import type { ContentSource } from "./common.js";
 
-// Re-export for convenience
+/** Content source type (re-exported from common for convenience) */
 export type { ContentSource };
 
 /** Trust classification for MCP servers */

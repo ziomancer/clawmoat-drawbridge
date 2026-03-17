@@ -106,6 +106,7 @@ export interface SanitizeConfig {
   includeRuleId: boolean;
 }
 
+/** Default sanitize/redaction configuration */
 export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
   placeholder: "[REDACTED]",
   includeRuleId: false,

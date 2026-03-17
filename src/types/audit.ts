@@ -7,7 +7,7 @@
 
 import type { AuditVerbosity } from "./common.js";
 
-// Re-export for convenience
+/** Verbosity tier (re-exported from common for convenience) */
 export type { AuditVerbosity };
 
 // ---------------------------------------------------------------------------
@@ -268,6 +268,7 @@ export interface AuditEmitterConfig {
   alertingEnabled: boolean;
 }
 
+/** Default audit emitter configuration */
 export const DEFAULT_AUDIT_CONFIG: AuditEmitterConfig = {
   enabled: true,
   verbosity: "standard",

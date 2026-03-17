@@ -42,6 +42,7 @@ import type { FrequencyUpdateResult, EscalationTier, SessionSuspicionState } fro
 import type { ResolvedProfile } from "../types/profiles.js";
 import { DEFAULT_HARD_BLOCK_RULES } from "../types/validation.js";
 
+/** Full pipeline orchestration: routes content through validation, scanning, frequency tracking, and audit */
 export class DrawbridgePipeline {
   private readonly scanner: DrawbridgeScanner;
   private readonly tracker: FrequencyTracker;

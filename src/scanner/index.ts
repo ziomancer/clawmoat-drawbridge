@@ -58,6 +58,7 @@ interface ClawMoatEngine {
 // DrawbridgeScanner
 // ---------------------------------------------------------------------------
 
+/** ClawMoat wrapper with threshold filtering, direction-aware scanning, and finding callbacks */
 export class DrawbridgeScanner {
   private readonly _engine: ClawMoatEngine;
   private readonly config: Required<Pick<DrawbridgeScannerConfig, "blockThreshold" | "direction">> & {

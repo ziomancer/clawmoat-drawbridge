@@ -26,6 +26,7 @@ import type {
   SchemaAuditEvent,
 } from "../types/audit.js";
 
+/** Evaluates audit events against configurable rules and fires alerts when patterns are detected */
 export class AlertManager {
   private readonly config: AlertManagerConfig;
 

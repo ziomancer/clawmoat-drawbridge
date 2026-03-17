@@ -19,6 +19,7 @@ export interface SyntacticFilterConfig {
   suppressRules: string[];
 }
 
+/** Default syntactic pre-filter configuration */
 export const DEFAULT_SYNTACTIC_CONFIG: SyntacticFilterConfig = {
   maxPayloadBytes: 524_288,
   maxJsonDepth: 10,
@@ -88,6 +89,7 @@ export interface SchemaValidationConfig {
   defaultBehavior: "strict" | "lenient";
 }
 
+/** Default schema validation configuration (disabled by default) */
 export const DEFAULT_SCHEMA_CONFIG: SchemaValidationConfig = {
   enabled: false,
   toolSchemas: {},

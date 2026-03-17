@@ -17,6 +17,7 @@ import { safeStringify } from "../lib/safe-stringify.js";
 // Frozen rule set — prevents config-injection on the filter itself
 // ---------------------------------------------------------------------------
 
+/** Frozen rule set — prevents config-injection on the filter itself */
 export const SYNTACTIC_RULES = Object.freeze({
   injectionPatterns: Object.freeze([
     Object.freeze({ pattern: /ignore previous instructions/i, ruleId: "drawbridge.syntactic.injection.ignore-previous" }),
@@ -121,6 +122,7 @@ function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
 // PreFilter
 // ---------------------------------------------------------------------------
 
+/** Syntactic pre-filter: pattern matching and structural checks before semantic analysis */
 export class PreFilter {
   private readonly config: SyntacticFilterConfig;
   private readonly schemaValidator: SchemaValidator | null;
@@ -321,6 +323,7 @@ function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "a
   return "object";
 }
 
+/** Validates MCP tool output against registered schemas with discriminated union support */
 export class SchemaValidator {
   private readonly config: SchemaValidationConfig;
 

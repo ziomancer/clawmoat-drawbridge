@@ -34,6 +34,7 @@ import {
 import { sha256 } from "../lib/sha256.js";
 export { sha256 };
 
+/** Emits structured, verbosity-gated audit events via callbacks */
 export class AuditEmitter {
   private readonly config: AuditEmitterConfig;
   private emitCount = 0;

@@ -126,6 +126,7 @@ export interface AlertManagerConfig {
   onError?: (error: unknown, alert: AlertPayload) => void;
 }
 
+/** Default alert rule configuration */
 export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
   syntacticFailBurst: {
     enabled: true,
@@ -150,6 +151,7 @@ export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
   },
 };
 
+/** Default alert manager configuration */
 export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = {
   enabled: true,
   rules: DEFAULT_ALERT_RULES,
