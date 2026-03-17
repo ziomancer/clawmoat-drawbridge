@@ -427,7 +427,6 @@ export class DrawbridgePipeline {
             this.auditor.emitOutputDiff({
               ...auditParams,
               removals: sanitizeResult.redactions
-                .filter(r => r.matchedLength > 0)
                 .map(r => ({
                   ruleId: r.ruleId,
                   matchedLength: r.matchedLength,
