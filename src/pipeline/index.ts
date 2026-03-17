@@ -247,39 +247,10 @@ export class DrawbridgePipeline {
     }
 
     // --- Stage 1b: Schema validation (MCP sources only) ---
-    let schemaResult: SchemaValidationResult | null = null;
+    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
 
-    if (this.schemaValidator && input.source === "mcp" && input.serverName && input.toolName) {
-      const parsedContent = typeof input.content === "string" ? undefined : input.content;
-      // Schema validation operates on the raw object, not stringified content
-      // If content is a string, try to parse it as JSON for schema validation
-      const contentForSchema = parsedContent ?? (() => {
-        try { return JSON.parse(content); } catch { return content; }
-      })();
-
-      schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
-
-      const trusted = this._trustedServers.includes(input.serverName);
-
-      // Audit: schema result
-      this.routeEvent(
-        this.auditor.emitSchema({
-          ...auditParams,
-          pass: schemaResult.pass,
-          violations: schemaResult.violations,
-          ruleIds: schemaResult.ruleIds,
-          serverName: input.serverName,
-          toolName: input.toolName,
-          trusted,
-        }),
-        events,
-        alerts,
-      );
-
-      // Feed schema ruleIds into frequency tracker
-      if (schemaResult.ruleIds.length > 0) {
-        preFilterRuleIds = [...preFilterRuleIds, ...schemaResult.ruleIds];
-      }
+    if (schemaResult && schemaResult.ruleIds.length > 0) {
+      preFilterRuleIds = [...preFilterRuleIds, ...schemaResult.ruleIds];
     }
 
     // --- Frequency update: pre-filter findings ---
@@ -563,30 +534,7 @@ export class DrawbridgePipeline {
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
   ): PipelineResult {
-    // Schema validation still runs on trusted servers (Alert Rule 2)
-    let schemaResult: SchemaValidationResult | null = null;
-    if (this.schemaValidator && input.source === "mcp" && input.serverName && input.toolName) {
-      const parsedContent = typeof input.content === "string" ? undefined : input.content;
-      const contentForSchema = parsedContent ?? (() => {
-        try { return JSON.parse(content); } catch { return content; }
-      })();
-
-      schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
-
-      this.routeEvent(
-        this.auditor.emitSchema({
-          ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
-          pass: schemaResult.pass,
-          violations: schemaResult.violations,
-          ruleIds: schemaResult.ruleIds,
-          serverName: input.serverName,
-          toolName: input.toolName,
-          trusted: true,
-        }),
-        events,
-        alerts,
-      );
-    }
+    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
 
     this.routeEvent(
       this.auditor.emitScan({
@@ -740,6 +688,46 @@ export class DrawbridgePipeline {
       events,
       alerts,
     );
+  }
+
+  /**
+   * Run schema validation if applicable (MCP source with serverName + toolName).
+   * Shared between the main inspect path and the trusted fast path.
+   */
+  private runSchemaValidation(
+    content: string,
+    input: PipelineInput,
+    events: TypedAuditEvent[],
+    alerts: AlertPayload[],
+    auditParams: Record<string, unknown>,
+  ): SchemaValidationResult | null {
+    if (!this.schemaValidator || input.source !== "mcp" || !input.serverName || !input.toolName) {
+      return null;
+    }
+
+    const parsedContent = typeof input.content === "string" ? undefined : input.content;
+    const contentForSchema = parsedContent ?? (() => {
+      try { return JSON.parse(content); } catch { return content; }
+    })();
+
+    const schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
+    const trusted = this._trustedServers.includes(input.serverName);
+
+    this.routeEvent(
+      this.auditor.emitSchema({
+        ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
+        pass: schemaResult.pass,
+        violations: schemaResult.violations,
+        ruleIds: schemaResult.ruleIds,
+        serverName: input.serverName,
+        toolName: input.toolName,
+        trusted,
+      }),
+      events,
+      alerts,
+    );
+
+    return schemaResult;
   }
 
   private buildResult(fields: PipelineResult): PipelineResult {
