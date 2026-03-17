@@ -725,14 +725,19 @@ export class DrawbridgePipeline {
     }
 
     // MCP source but missing identifiers — emit a misconfiguration signal
-    // rather than silently skipping schema validation.
+    // and return a concrete failure so PipelineResult.schemaResult reflects it.
     if (!input.serverName || !input.toolName) {
+      const missingResult: SchemaValidationResult = {
+        pass: false,
+        violations: ["MCP source is missing serverName or toolName — schema validation skipped"],
+        ruleIds: ["schema.invalid-key"],
+      };
       this.routeEvent(
         this.auditor.emitSchema({
           ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
           pass: false,
-          violations: ["MCP source is missing serverName or toolName — schema validation skipped"],
-          ruleIds: ["schema.invalid-key"],
+          violations: missingResult.violations,
+          ruleIds: missingResult.ruleIds,
           serverName: input.serverName ?? "<unknown>",
           toolName: input.toolName ?? "<unknown>",
           trusted: false, // misconfiguration, not a content violation — never fire trustedToolSchemaFail
@@ -740,7 +745,7 @@ export class DrawbridgePipeline {
         events,
         alerts,
       );
-      return null;
+      return missingResult;
     }
 
     // Use the original content object when available (non-string input.content)

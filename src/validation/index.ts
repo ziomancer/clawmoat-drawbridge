@@ -333,13 +333,18 @@ export class SchemaValidator {
       ),
     };
 
-    // Validate registered schema keys at construction time — a key with
-    // the wrong number of colons would be unreachable at validate() time.
-    for (const key of Object.keys(this.config.toolSchemas ?? {})) {
+    // Validate registered schemas at construction time so misconfigurations
+    // surface immediately rather than at first validate() call.
+    for (const [key, schema] of Object.entries(this.config.toolSchemas ?? {})) {
       const parts = key.split(":");
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new Error(
           `SchemaValidator: invalid toolSchemas key "${key}" — must be "serverName:toolName" with exactly one colon and non-empty components`,
+        );
+      }
+      if (Object.keys(schema.variants).length === 0) {
+        throw new Error(
+          `SchemaValidator: toolSchema for "${key}" has an empty variants map — at least one variant is required`,
         );
       }
     }

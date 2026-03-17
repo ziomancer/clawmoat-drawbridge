@@ -95,9 +95,21 @@ export interface ToolOutputSchema {
 export interface FieldSchema {
   /** Required field names */
   required?: string[];
-  /** Field type expectations: field name → expected type (checked only when field is present) */
+  /**
+   * Field type expectations: field name → expected type (checked only when field is present).
+   *
+   * There is no union type support — a nullable field (e.g. `object | null`) cannot
+   * be expressed. Either omit the field from `fields` to skip type checking, or
+   * register it as `"null"` to accept only null values.
+   */
   fields?: Record<string, "string" | "number" | "boolean" | "object" | "array" | "null">;
-  /** Whether extra fields beyond those declared are allowed. Default: false */
+  /**
+   * Whether extra fields beyond those declared are allowed. Default: false.
+   *
+   * When both `required` and `fields` are omitted, this defaults to false,
+   * meaning ALL fields in the content object are treated as unexpected.
+   * Set `allowExtra: true` for a variant that allows any object structure.
+   */
   allowExtra?: boolean;
 }
 
