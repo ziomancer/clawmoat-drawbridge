@@ -315,7 +315,10 @@ export class PreFilter {
 function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "array" | "null" {
   if (value === null) return "null";
   if (Array.isArray(value)) return "array";
-  return typeof value as "string" | "number" | "boolean" | "object";
+  const t = typeof value;
+  if (t === "string" || t === "number" || t === "boolean" || t === "object") return t;
+  // function, symbol, bigint, undefined — not valid JSON types
+  return "object";
 }
 
 export class SchemaValidator {
