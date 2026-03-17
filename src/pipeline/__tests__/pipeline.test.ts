@@ -815,7 +815,7 @@ describe("DrawbridgePipeline", () => {
       expect(Object.isFrozen(profile)).toBe(true);
     });
 
-    it("39. getAuditStats() returns correct counts", () => {
+    it("39. getAuditStats() returns non-zero after inspect, zero after clear", () => {
       const finding = makeFinding();
       const { pipeline } = createTestPipeline(
         { audit: { verbosity: "maximum" } },
@@ -825,16 +825,37 @@ describe("DrawbridgePipeline", () => {
       pipeline.inspect(injectionInput("s1"));
       const stats = pipeline.getAuditStats();
       expect(stats.emitted).toBeGreaterThan(0);
-      expect(typeof stats.dropped).toBe("number");
-      expect(typeof stats.errors).toBe("number");
+
+      pipeline.clear();
+      const after = pipeline.getAuditStats();
+      expect(after.emitted).toBe(0);
+      expect(after.dropped).toBe(0);
+      expect(after.errors).toBe(0);
     });
 
-    it("40. getAlertStats() returns correct counts", () => {
-      const { pipeline } = createTestPipeline();
+    it("40. getAlertStats() returns non-zero after inspect, zero after clear", () => {
+      const finding = makeFinding();
+      const { pipeline } = createTestPipeline(
+        {
+          alerting: {
+            rules: {
+              // Enable burst with low threshold so a single call fires
+              syntacticFailBurst: { enabled: true, count: 1, windowMinutes: 60 },
+            },
+          },
+        },
+        () => makeBlockResult([finding]),
+      );
+
+      pipeline.inspect(injectionInput("s1"));
       const stats = pipeline.getAlertStats();
-      expect(typeof stats.alerts).toBe("number");
-      expect(typeof stats.suppressed).toBe("number");
-      expect(typeof stats.rateLimited).toBe("number");
+      expect(stats.alerts).toBeGreaterThan(0);
+
+      pipeline.clear();
+      const after = pipeline.getAlertStats();
+      expect(after.alerts).toBe(0);
+      expect(after.suppressed).toBe(0);
+      expect(after.rateLimited).toBe(0);
     });
 
     it("41a. resetSession() clears frequency state", () => {
@@ -881,7 +902,7 @@ describe("DrawbridgePipeline", () => {
       return events.filter((e): e is OutputDiffEvent => e.event === "output_diff");
     }
 
-    it("21. content with redactions → output_diff event emitted with real data", () => {
+    it("21. content with redactions → output_diff event emitted with position and fallback", () => {
       const { pipeline, events } = createTestPipeline(
         {},
         () => makeBlockResult([injectionFinding]),
@@ -893,6 +914,29 @@ describe("DrawbridgePipeline", () => {
       expect(diffs).toHaveLength(1);
       expect(diffs[0]!.removals.length).toBeGreaterThan(0);
       expect(diffs[0]!.replacements.length).toBeGreaterThan(0);
+      // injectionFinding has position: 0 → not a fallback
+      expect(diffs[0]!.removals[0]!.position).toBe(0);
+      expect(diffs[0]!.removals[0]!.fallback).toBe(false);
+      expect(diffs[0]!.replacements[0]!.fallback).toBe(false);
+    });
+
+    it("21b. fallback finding → output_diff removals[].fallback is true", () => {
+      const fallbackFinding = makeFinding({
+        matched: "ignore previous instructions",
+        position: -1, // triggers indexOf fallback
+      });
+      const { pipeline, events } = createTestPipeline(
+        {},
+        () => makeBlockResult([fallbackFinding]),
+      );
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(1);
+      expect(diffs[0]!.removals[0]!.fallback).toBe(true);
+      expect(diffs[0]!.removals[0]!.position).toBeGreaterThanOrEqual(0);
+      expect(diffs[0]!.replacements[0]!.fallback).toBe(true);
     });
 
     it("22. content with no redactions → output_diff NOT emitted", () => {

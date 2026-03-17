@@ -743,11 +743,10 @@ export class DrawbridgePipeline {
       return null;
     }
 
-    // Use the original content object when available (non-string input.content);
-    // otherwise parse the stringified form. Note: if safeStringify altered the
-    // representation (e.g. BigInt → null, circular refs → "[Circular]"), the
-    // round-tripped object will differ from the original — this is intentional,
-    // as the validator should see what downstream consumers would see.
+    // Use the original content object when available (non-string input.content)
+    // to validate the canonical in-memory form — no round-trip serialization
+    // artifacts. For string inputs, parse to recover the object; if parsing
+    // fails the raw string is passed through and the validator rejects it.
     const parsedContent = typeof input.content !== "string" ? input.content : undefined;
     const contentForSchema = parsedContent !== undefined
       ? parsedContent

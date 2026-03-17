@@ -88,7 +88,7 @@ export interface AlertRuleConfigs {
     /** Time window in minutes. Default: 5 */
     windowMinutes: number;
   };
-  trustedToolSchemaFail: {
+  trustedToolSchemaFail?: {
     enabled: boolean;
   };
 }

@@ -292,7 +292,7 @@ export class AlertManager {
     event: TypedAuditEvent,
   ): AlertPayload | null {
     const rule = this.config.rules.trustedToolSchemaFail;
-    if (!rule.enabled) return null;
+    if (!rule?.enabled) return null;
 
     const schemaEvent = event as SchemaAuditEvent;
     if (schemaEvent.trusted !== true) return null;
@@ -359,7 +359,13 @@ export class AlertManager {
   // ---------------------------------------------------------------------------
 
   private isDuplicate(alert: AlertPayload): boolean {
-    const key = `${alert.ruleId}|${alert.sessionId}`;
+    // Include tool identity for schema alerts so different tools' failures
+    // aren't collapsed within the same session.
+    let key = `${alert.ruleId}|${alert.sessionId}`;
+    if (alert.ruleId === "trustedToolSchemaFail") {
+      const trigger = alert.details.triggeringEvents[0] as SchemaAuditEvent | undefined;
+      key += `|${trigger?.serverName ?? ""}:${trigger?.toolName ?? ""}`;
+    }
     const lastTime = this.dedupMap.get(key);
     const windowMs = this.config.suppressionWindowMinutes * 60_000;
     const now = Date.now();
