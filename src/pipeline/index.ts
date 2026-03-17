@@ -250,12 +250,13 @@ export class DrawbridgePipeline {
     // --- Stage 1b: Schema validation (MCP sources only) ---
     const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
 
-    if (schemaResult && schemaResult.ruleIds.length > 0) {
-      preFilterRuleIds = [...preFilterRuleIds, ...schemaResult.ruleIds];
-    }
+    // Schema violations are structural (type/format issues), not injection signals.
+    // They are tracked via audit events and the trustedToolSchemaFail alert rule,
+    // but excluded from frequency/suspicion scoring to avoid false escalation
+    // from legitimate tools with schema mismatches.
 
     // --- Frequency update: pre-filter findings ---
-    // Intentional: both stages contribute to suspicion -- defense in depth
+    // Syntactic pre-filter findings contribute to suspicion — defense in depth
     let frequencyResult: FrequencyUpdateResult | null = null;
 
     if (preFilterRuleIds.length > 0) {

@@ -1040,7 +1040,7 @@ describe("DrawbridgePipeline", () => {
       expect(result.schemaResult).toBeNull();
     });
 
-    it("40. schema fail → ruleIds feed frequency tracker", () => {
+    it("40. schema fail → ruleIds excluded from frequency tracker", () => {
       const { pipeline } = createTestPipeline({
         schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
         frequency: {
@@ -1053,10 +1053,10 @@ describe("DrawbridgePipeline", () => {
 
       expect(result.schemaResult).not.toBeNull();
       expect(result.schemaResult!.pass).toBe(false);
-      // Frequency should have been updated with schema ruleIds
+      // Schema violations are structural, not injection signals — they should
+      // NOT feed suspicion scoring (tracked via audit/alerting instead)
       const state = pipeline.getSessionState("s1");
-      expect(state).not.toBeNull();
-      expect(state!.lastScore).toBeGreaterThan(0);
+      expect(state).toBeNull();
     });
 
     it("41. schema audit events emitted at correct verbosity", () => {
