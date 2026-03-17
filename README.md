@@ -4,7 +4,7 @@
 
 <p align="center">
   Session-aware content sanitization pipeline powered by <a href="https://github.com/darfaz/clawmoat">ClawMoat</a>.<br>
-  Standalone library — wire into any agent pipeline. 295 tests, security-audited.
+  Standalone library — wire into any agent pipeline. 350 tests, security-audited.
 </p>
 
 ---
@@ -83,7 +83,7 @@ if (result.terminated) {
 
 ### Content Sanitize
 
-Position-based redaction with overlap merging. Strips or replaces matched content from scanner findings. Configurable placeholders, blocked-only or redact-all modes.
+Position-based redaction with overlap merging. Strips or replaces matched content from scanner findings. Configurable placeholders, blocked-only or redact-all modes. Optional HMAC-SHA256 content hashing for redaction audit trails (no bare SHA-256 ever emitted).
 
 <details>
 <summary>Usage</summary>
@@ -92,6 +92,13 @@ Position-based redaction with overlap merging. Strips or replaces matched conten
 const { sanitized, safe } = scanner.scanAndSanitize(content);
 // sanitized.sanitized → redacted content
 // sanitized.redactionCount → number of replacements
+
+// With HMAC hashing for audit correlation:
+const result = sanitizeContent(content, findings, {
+  hashRedactions: true,
+  hmacKey: process.env.REDACTION_HMAC_KEY,
+});
+// result.redactions[0].contentHash → HMAC-SHA256 hex string
 ```
 </details>
 
@@ -152,15 +159,47 @@ const audit = new AuditEmitter({
 ```
 </details>
 
-### Pipeline (v1.0)
+### Schema Validator
 
-Single `inspect()` call that orchestrates every stage: trust check, pre-filter, two-pass gate, scanner, frequency tracking, sanitize, audit emission, and alert evaluation. Returns a unified `PipelineResult` with safety verdict, redacted content, audit events, and alerts.
+Validates MCP tool output against registered schemas with discriminated union support. Colon-namespaced keys (`serverName:toolName`), prototype-pollution-safe field checks, and fail-closed defaults. Runs as a standalone module or wired into the pipeline.
 
-- **Trust tier routing** — trusted MCP servers bypass inspection entirely
+<details>
+<summary>Usage</summary>
+
+```ts
+import { SchemaValidator } from "@ziomancer/clawmoat-drawbridge";
+
+const validator = new SchemaValidator({
+  enabled: true,
+  toolSchemas: {
+    "my-server:my-tool": {
+      discriminant: "type",
+      variants: {
+        success: { required: ["data"], fields: { data: "string" } },
+        error: { required: ["message"], fields: { message: "string" } },
+      },
+    },
+  },
+});
+
+const result = validator.validate(toolOutput, "my-server", "my-tool");
+if (!result.pass) {
+  console.log("Schema violations:", result.violations);
+}
+```
+</details>
+
+### Pipeline (v1.1)
+
+Single `inspect()` call that orchestrates every stage: trust check, pre-filter, schema validation, two-pass gate, scanner, frequency tracking, sanitize, audit emission, and alert evaluation. Returns a unified `PipelineResult` with safety verdict, redacted content, audit events, and alerts.
+
+- **Trust tier routing** — trusted MCP servers bypass inspection (schema validation still runs)
+- **Schema validation** — MCP tool outputs validated against registered schemas; hard-blocked content skips schema
 - **Two-pass gating** — hard-block pre-filter rules skip the scanner; prior session suspicion can force the scanner back on
+- **HMAC redaction hashing** — opt-in keyed hashes on redacted content for audit correlation (no bare SHA-256)
 - **Terminated session fast-path** — tier3 sessions are blocked immediately without re-inspection
 - **Profile-driven tuning** — profile applied at construction, tunes pre-filter and frequency tracker
-- **Construction event storage** — `profile_loaded` and `audit_config_loaded` events prepended to the first `inspect()` result
+- **Trusted tool alerts** — `trustedToolSchemaFail` fires high-severity alerts when trusted servers emit malformed output
 - **Module accessors** — `scannerModule`, `frequencyModule`, `resolvedProfile`, etc. for fine-grained control
 
 <details>
@@ -173,6 +212,14 @@ const pipeline = new DrawbridgePipeline({
   profile: "admin",
   trustedServers: ["local-filesystem"],
   twoPass: { enabled: true },
+  schema: {
+    enabled: true,
+    toolSchemas: { "my-server:my-tool": myToolSchema },
+  },
+  sanitize: {
+    hashRedactions: true,
+    hmacKey: process.env.REDACTION_HMAC_KEY,
+  },
   audit: {
     verbosity: "high",
     onEvent: (event) => console.log(JSON.stringify(event)),
@@ -211,6 +258,7 @@ if (result.terminated) {
                     ┌──────────────▼──────────────────────┐
                     │         Trust Check                 │
                     │   trusted server? → fast-path exit  │
+                    │   (schema validation still runs)    │
                     └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
@@ -220,8 +268,13 @@ if (result.terminated) {
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
                     │      Two-Pass Gate                  │                   │
-                    │  hard block? skip scanner           │                   │
+                    │  hard block? skip scanner + schema  │                   │
                     │  (frequency override can force it)  │                   │
+                    └──────────────┬──────────────────────┘                   │
+                                   │                                          │
+                    ┌──────────────▼──────────────────────┐                   │
+                    │   Schema Validator (MCP only)       │                   │
+                    │   discriminated unions, field types  │                   │
                     └──────────────┬──────────────────────┘                   │
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
@@ -232,7 +285,8 @@ if (result.terminated) {
                     ┌──────────────▼──────────────────────┐    ┌─────────────▼──────────┐
                     │         Sanitize                    │    │  Frequency Tracker      │
                     │   redact blocked content            │    │  decay scoring, tiers   │
-                    └──────────────┬──────────────────────┘    └─────────────────────────┘
+                    │   (HMAC hashing opt-in)             │    └─────────────────────────┘
+                    └──────────────┬──────────────────────┘
                                    │
                     ┌──────────────▼──────────────────────┐
                     │       Audit Emitter                 │
@@ -242,6 +296,7 @@ if (result.terminated) {
                     ┌──────────────▼──────────────────────┐
                     │       Alert Manager                 │
                     │  rules → onAlert callback           │
+                    │  (trustedToolSchemaFail alert)      │
                     └─────────────────────────────────────┘
 ```
 
@@ -251,19 +306,20 @@ All modules are standalone — use individually or together. Context profiles tu
 
 | Module | Version | Tests | Status |
 |--------|---------|-------|--------|
-| Scanner | v0.1 | 18 | ✅ Implemented + audited |
+| Scanner | v0.1 | 20 | ✅ Implemented + audited |
 | Frequency Tracker | v0.2 | 32 | ✅ Implemented + audited |
 | Pre-Filter | v0.3 | 35 | ✅ Implemented + audited |
+| Schema Validator | v1.1 | 17 | ✅ Implemented + hardened |
 | Profiles | v0.3 | 24 | ✅ Implemented + audited |
-| Sanitize | v0.3 | 20 | ✅ Implemented + audited |
+| Sanitize | v1.1 | 38 | ✅ HMAC hashing, overlap merge |
 | Audit Emitter | v0.4 | 41 | ✅ Implemented + audited |
-| Alert Manager | v0.5 | 38 | ✅ Implemented + audited |
+| Alert Manager | v1.1 | 38 | ✅ trustedToolSchemaFail added |
 | Security Audit | — | 45 | ✅ 7 bugs found and fixed |
-| Pipeline | v1.0 | 42 | ✅ Implemented |
+| Pipeline | v1.1 | 60 | ✅ Schema, HMAC, hardening |
 
 ## Security
 
-Security audit completed across all modules. 7 vulnerabilities found and fixed:
+Security audit completed across all modules. 7 vulnerabilities found and fixed in v1.0, plus v1.1 hardening:
 
 | ID | Severity | Description |
 |----|----------|-------------|
@@ -274,6 +330,16 @@ Security audit completed across all modules. 7 vulnerabilities found and fixed:
 | S5.1 | Medium | Out-of-bounds position produced phantom redactions |
 | X3a | Medium | `SYNTACTIC_RULES` shallow freeze — nested arrays mutable |
 | X3b | Medium | `EVENT_MIN_VERBOSITY` not frozen |
+
+### v1.1 Hardening
+
+- **HMAC-SHA256 redaction hashing** — bare SHA-256 of short secrets is brute-forceable; replaced with keyed HMAC. No hash emitted without an explicit `hmacKey`.
+- **Prototype pollution guards** — all `in` operator usage in schema validation replaced with `Object.hasOwn()` to prevent prototype chain traversal.
+- **Schema key namespace validation** — colon-in-key guards, empty-component rejection, constructor-time empty-variant detection.
+- **Deep-cloned toolSchemas** — `structuredClone` per schema value prevents post-construction mutation via caller's retained reference.
+- **Double-violation prevention** — fields flagged as missing are skipped during type checking to avoid duplicate violations.
+- **Schema on hard-blocked content** — schema validation skipped for content already rejected by the two-pass gate.
+- **`safe` vs `schemaResult.pass`** — `PipelineResult.safe` reflects injection detection only; schema validity must be checked independently.
 
 Tier 3 frequency alerts cannot be disabled — the constructor enforces `tier3Enabled: true` regardless of consumer config.
 
