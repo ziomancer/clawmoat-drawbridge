@@ -88,6 +88,10 @@ export interface AlertRuleConfigs {
     /** Time window in minutes. Default: 5 */
     windowMinutes: number;
   };
+  /**
+   * Alert Rule 2: fire on schema_fail from a trusted server.
+   * Optional for backward compatibility — defaults to `{ enabled: true }` when absent.
+   */
   trustedToolSchemaFail?: {
     enabled: boolean;
   };

@@ -306,11 +306,13 @@ export class DrawbridgePipeline {
     }
 
     // --- Stage 1b: Schema validation (MCP sources only) ---
-    // Runs after the two-pass gate so hard-blocked content doesn't trigger
-    // schema events or trustedToolSchemaFail alerts for already-rejected input.
-    // Schema violations are structural (type/format issues), not injection signals —
-    // tracked via audit events but excluded from frequency/suspicion scoring.
-    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
+    // Skipped for hard-blocked content — no point validating schema on input
+    // that's already rejected. Schema violations are structural (type/format
+    // issues), not injection signals — tracked via audit events but excluded
+    // from frequency/suspicion scoring.
+    const schemaResult = skipScanner
+      ? null
+      : this.runSchemaValidation(content, input, events, alerts, auditParams);
 
     // --- Stage 2: Scanner (ClawMoat) ---
     let scanResult: DrawbridgeScanResult | null = null;

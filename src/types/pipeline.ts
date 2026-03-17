@@ -38,7 +38,11 @@ export interface PipelineInput {
 
 /** Full pipeline result */
 export interface PipelineResult {
-  /** Overall safety verdict -- false if ANY stage blocked */
+  /**
+   * Overall safety verdict — false if ANY injection-detection stage blocked.
+   * Does not reflect schema validation results — check `schemaResult.pass`
+   * independently for structural validity.
+   */
   safe: boolean;
 
   /** Was content from a trusted source? (bypassed full inspection) */
@@ -47,7 +51,7 @@ export interface PipelineResult {
   /** Pre-filter result (null if trusted fast-path or pre-filter disabled) */
   preFilterResult: SyntacticFilterResult | null;
 
-  /** Schema validation result (null if schema validation disabled, source is not MCP, or MCP tool not fully identified) */
+  /** Schema validation result (null if disabled, source is not MCP, or content was hard-blocked by two-pass gate) */
   schemaResult: SchemaValidationResult | null;
 
   /** Scanner result (null if trusted fast-path, or skipped by two-pass) */

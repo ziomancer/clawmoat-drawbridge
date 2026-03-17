@@ -117,6 +117,10 @@ export interface SanitizeConfig {
    * HMAC key for redaction hashes. Optional — when `hashRedactions` is true
    * but `hmacKey` is not provided, redaction hashes are empty strings.
    * No bare SHA-256 is ever emitted.
+   *
+   * The key is retained in memory as a plain string for the lifetime of the
+   * DrawbridgePipeline instance. Callers using rotation-eligible keys should
+   * construct a new pipeline when the key rotates.
    */
   hmacKey?: string;
 }
