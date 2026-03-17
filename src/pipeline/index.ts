@@ -401,8 +401,10 @@ export class DrawbridgePipeline {
               removals: sanitizeResult.redactions
                 .map(r => ({
                   ruleId: r.ruleId,
+                  position: r.position,
                   matchedLength: r.matchedLength,
                   sha256: r.sha256,
+                  fallback: r.fallback,
                 })),
               replacements: sanitizeResult.redactions.map(r => ({
                 ruleId: r.ruleId,

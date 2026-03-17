@@ -202,8 +202,10 @@ export interface OutputDiffEvent extends AuditEvent {
   event: "output_diff";
   removals: Array<{
     ruleId: string;
+    position: number;
     matchedLength: number;
     sha256: string;
+    fallback: boolean;
   }>;
   replacements: Array<{
     ruleId: string;
