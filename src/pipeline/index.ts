@@ -96,8 +96,8 @@ export class DrawbridgePipeline {
     const syntacticConfig = this.profile.applySyntacticConfig(cfg.syntactic);
     this.preFilter = new PreFilter(syntacticConfig);
 
-    // 2b. Schema validator (if config provided)
-    this.schemaValidator = cfg.schema
+    // 2b. Schema validator (only when explicitly enabled)
+    this.schemaValidator = cfg.schema?.enabled
       ? new SchemaValidator(cfg.schema)
       : null;
 
