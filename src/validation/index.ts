@@ -304,8 +304,9 @@ export class PreFilter {
     toolName: string,
   ): SchemaValidationResult {
     if (!this.schemaValidator) {
-      // Schema validation not configured — pass without validation
-      return { pass: true, violations: [], ruleIds: [] };
+      // Schema validation not configured — pass without validation.
+      // Callers can check for "schema.not-configured" to distinguish from a genuine pass.
+      return { pass: true, violations: [], ruleIds: ["schema.not-configured"] };
     }
     return this.schemaValidator.validate(content, serverName, toolName);
   }
@@ -407,7 +408,7 @@ export class SchemaValidator {
 
     if (schema.discriminant) {
       const discriminantValue = obj[schema.discriminant];
-      if (typeof discriminantValue !== "string" || !(discriminantValue in schema.variants)) {
+      if (typeof discriminantValue !== "string" || !Object.hasOwn(schema.variants, discriminantValue)) {
         const msg = discriminantValue === undefined
           ? `Missing discriminant field "${schema.discriminant}"`
           : `Unknown discriminant value "${String(discriminantValue)}" for field "${schema.discriminant}"`;

@@ -710,7 +710,7 @@ export class DrawbridgePipeline {
     }
 
     const parsedContent = typeof input.content === "string" ? undefined : input.content;
-    const contentForSchema = parsedContent ?? (() => {
+    const contentForSchema = parsedContent != null ? parsedContent : (() => {
       try { return JSON.parse(content); } catch { return content; }
     })();
 
