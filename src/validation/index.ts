@@ -325,8 +325,12 @@ export class SchemaValidator {
     this.config = {
       ...DEFAULT_SCHEMA_CONFIG,
       ...config,
-      // Defensive copy — prevent post-construction mutation via caller's reference
-      toolSchemas: { ...(config?.toolSchemas ?? DEFAULT_SCHEMA_CONFIG.toolSchemas) },
+      // Deep copy — prevent post-construction mutation of nested schema objects
+      toolSchemas: Object.fromEntries(
+        Object.entries(config?.toolSchemas ?? DEFAULT_SCHEMA_CONFIG.toolSchemas).map(
+          ([k, v]) => [k, structuredClone(v)],
+        ),
+      ),
     };
 
     // Validate registered schema keys at construction time — a key with

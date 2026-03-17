@@ -736,7 +736,9 @@ export class DrawbridgePipeline {
           ruleIds: ["schema.invalid-key"],
           serverName: input.serverName ?? "<unknown>",
           toolName: input.toolName ?? "<unknown>",
-          trusted: false,
+          trusted: input.serverName
+            ? this._trustedServers.includes(input.serverName)
+            : false,
         }),
         events,
         alerts,
