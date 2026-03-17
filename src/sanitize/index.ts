@@ -65,7 +65,6 @@ export function sanitizeContent(
 
   // 2. Build replacement ranges
   const ranges: RedactionRange[] = [];
-  let fallbackRedactions = 0;
   for (const finding of selected) {
     const matched = finding.source.matched;
     if (!matched) continue;
@@ -99,7 +98,6 @@ export function sanitizeContent(
         });
         searchFrom = idx + matched.length;
         fallbackCount++;
-        fallbackRedactions++;
       }
     }
   }
@@ -167,7 +165,7 @@ export function sanitizeContent(
     charactersRemoved,
     redactedRuleIds: [...redactedRuleIds],
     originalLength: content.length,
-    fallbackRedactions,
+    fallbackRedactions: redactions.filter(r => r.fallback).length,
     redactions,
   };
 }
