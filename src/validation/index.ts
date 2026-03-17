@@ -320,13 +320,20 @@ export class PreFilter {
 // SchemaValidator
 // ---------------------------------------------------------------------------
 
+/**
+ * Map a JS value to the closest JSON type name for schema validation.
+ *
+ * Non-JSON types (undefined, function, symbol, bigint) return "null" so they
+ * fail any type check except an explicit "null" declaration. This is intentional:
+ * JSON-parsed payloads never contain these types, and raw JS objects reaching
+ * the validator via input.content should not silently match "object" or any
+ * other structural type.
+ */
 function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "array" | "null" {
   if (value === null || value === undefined) return "null";
   if (Array.isArray(value)) return "array";
   const t = typeof value;
   if (t === "string" || t === "number" || t === "boolean" || t === "object") return t;
-  // function, symbol, bigint — not valid JSON types; return "null" so they
-  // never silently match any expected schema type
   return "null";
 }
 
@@ -336,6 +343,17 @@ export class SchemaValidator {
 
   constructor(config?: Partial<SchemaValidationConfig>) {
     this.config = { ...DEFAULT_SCHEMA_CONFIG, ...config };
+
+    // Validate registered schema keys at construction time — a key with
+    // the wrong number of colons would be unreachable at validate() time.
+    for (const key of Object.keys(this.config.toolSchemas ?? {})) {
+      const parts = key.split(":");
+      if (parts.length !== 2) {
+        throw new Error(
+          `SchemaValidator: invalid toolSchemas key "${key}" — must be "serverName:toolName" with exactly one colon`,
+        );
+      }
+    }
   }
 
   validate(

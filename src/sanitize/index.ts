@@ -113,7 +113,11 @@ export function sanitizeContent(
   // 3. Sort by start position ascending for merge
   ranges.sort((a, b) => a.start - b.start);
 
-  // 4. Merge overlapping ranges (higher severity ruleId wins)
+  // 4. Merge overlapping ranges (higher severity ruleId wins).
+  // Note: after merge, ruleId reflects the highest-severity contributing finding
+  // while fallback reflects whether *any* contributing range used fallback.
+  // These may come from different findings — the merged entry represents the
+  // union of all overlapping redactions, not a single finding.
   const merged: RedactionRange[] = [ranges[0]!];
   for (let i = 1; i < ranges.length; i++) {
     const current = ranges[i]!;

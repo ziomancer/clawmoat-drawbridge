@@ -62,11 +62,18 @@ export interface ToolOutputSchema {
   variants: Record<string, FieldSchema>;
 }
 
-/** Field-level schema (simple validation, not full JSON Schema) */
+/**
+ * Field-level schema (simple validation, not full JSON Schema).
+ *
+ * Fields listed in `fields` but not in `required` are optional: their absence
+ * produces no violation, but if present their type is checked. There is no way
+ * to express "must be present AND must be type X" other than including the field
+ * in both `required` and `fields`.
+ */
 export interface FieldSchema {
   /** Required field names */
   required?: string[];
-  /** Field type expectations: field name → expected type */
+  /** Field type expectations: field name → expected type (checked only when field is present) */
   fields?: Record<string, "string" | "number" | "boolean" | "object" | "array" | "null">;
   /** Whether extra fields beyond those declared are allowed. Default: false */
   allowExtra?: boolean;

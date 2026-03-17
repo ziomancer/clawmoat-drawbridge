@@ -404,14 +404,14 @@ export class DrawbridgePipeline {
                   ruleId: r.ruleId,
                   position: r.position,
                   matchedLength: r.matchedLength,
-                  sha256: r.sha256,
+                  contentHash: r.sha256,
                   fallback: r.fallback,
                 })),
               replacements: sanitizeResult.redactions.map(r => ({
                 ruleId: r.ruleId,
                 lengthBefore: r.matchedLength,
                 lengthAfter: r.replacement.length,
-                sha256Before: r.sha256,
+                contentHash: r.sha256,
               })),
             }),
             events,
@@ -697,6 +697,11 @@ export class DrawbridgePipeline {
   /**
    * Run schema validation if applicable (MCP source with serverName + toolName).
    * Shared between the main inspect path and the trusted fast path.
+   *
+   * When `input.content` is a string and `JSON.parse` fails, the raw string is
+   * passed to the validator. `validateAgainstSchema` will reject it (typeof !== "object"),
+   * and `validateDefault` strict mode will reject it (jsType === "string"). This is a
+   * safe fallback — malformed/binary data cannot silently pass schema checks.
    */
   private runSchemaValidation(
     content: string,

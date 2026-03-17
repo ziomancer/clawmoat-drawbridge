@@ -204,14 +204,16 @@ export interface OutputDiffEvent extends AuditEvent {
     ruleId: string;
     position: number;
     matchedLength: number;
-    sha256: string;
+    /** HMAC-SHA256 of removed content if hashRedactions + hmacKey configured, otherwise empty string */
+    contentHash: string;
     fallback: boolean;
   }>;
   replacements: Array<{
     ruleId: string;
     lengthBefore: number;
     lengthAfter: number;
-    sha256Before: string;
+    /** HMAC-SHA256 of content before replacement if hashRedactions + hmacKey configured, otherwise empty string */
+    contentHash: string;
   }>;
 }
 
