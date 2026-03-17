@@ -400,7 +400,7 @@ export class SchemaValidator {
         ruleIds: ["schema.type-mismatch"],
       };
     }
-    return { pass: true, violations: [], ruleIds: [] };
+    return { pass: true, violations: [], ruleIds: ["schema.no-schema-registered"] };
   }
 
   private validateAgainstSchema(
@@ -433,10 +433,17 @@ export class SchemaValidator {
           ruleIds: ["schema.missing-field"],
         };
       }
-      if (typeof discriminantValue !== "string" || !Object.hasOwn(schema.variants, discriminantValue)) {
+      if (typeof discriminantValue !== "string") {
         return {
           pass: false,
-          violations: [`Unknown discriminant value "${String(discriminantValue)}" for field "${schema.discriminant}"`],
+          violations: [`Discriminant field "${schema.discriminant}" must be a string, got ${jsType(discriminantValue)}`],
+          ruleIds: ["schema.type-mismatch"],
+        };
+      }
+      if (!Object.hasOwn(schema.variants, discriminantValue)) {
+        return {
+          pass: false,
+          violations: [`Unknown discriminant value "${discriminantValue}" for field "${schema.discriminant}"`],
           ruleIds: ["schema.type-mismatch"],
         };
       }

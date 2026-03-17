@@ -54,9 +54,20 @@ export interface PreFilterResult {
 // Schema validation types
 // ---------------------------------------------------------------------------
 
-/** Tool output schema declaration */
+/**
+ * Tool output schema declaration.
+ *
+ * Registered schemas only validate object-typed tool outputs. Tools that
+ * return top-level arrays will fail with `schema.type-mismatch` — leave
+ * such tools unregistered to use `validateDefault` instead.
+ */
 export interface ToolOutputSchema {
-  /** Discriminant field name for polymorphic responses (e.g. "type", "status") */
+  /**
+   * Discriminant field name for polymorphic responses (e.g. "type", "status").
+   * The field's value in the content object must be a string matching one of
+   * the keys in `variants`. Non-string discriminant values (e.g. numeric
+   * status codes) are not supported and will produce a type-mismatch violation.
+   */
   discriminant?: string;
   /** Schema variants keyed by discriminant value. If no discriminant, use a single-key map. */
   variants: Record<string, FieldSchema>;
