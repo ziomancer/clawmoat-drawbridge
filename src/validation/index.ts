@@ -348,9 +348,9 @@ export class SchemaValidator {
     // the wrong number of colons would be unreachable at validate() time.
     for (const key of Object.keys(this.config.toolSchemas ?? {})) {
       const parts = key.split(":");
-      if (parts.length !== 2) {
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new Error(
-          `SchemaValidator: invalid toolSchemas key "${key}" — must be "serverName:toolName" with exactly one colon`,
+          `SchemaValidator: invalid toolSchemas key "${key}" — must be "serverName:toolName" with exactly one colon and non-empty components`,
         );
       }
     }

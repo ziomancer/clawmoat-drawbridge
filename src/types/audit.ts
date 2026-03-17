@@ -197,7 +197,14 @@ export interface RuleTriggeredEvent extends AuditEvent {
   stage: "scanner" | "syntactic";
 }
 
-/** output_diff (high tier) */
+/**
+ * output_diff (high tier).
+ *
+ * `removals` and `replacements` are parallel arrays — `removals[i]` and
+ * `replacements[i]` describe the same physical redaction. Do not filter
+ * or reorder one array independently without applying the same operation
+ * to the other.
+ */
 export interface OutputDiffEvent extends AuditEvent {
   event: "output_diff";
   removals: Array<{
