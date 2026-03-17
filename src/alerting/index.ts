@@ -295,7 +295,7 @@ export class AlertManager {
     if (!rule.enabled) return null;
 
     const schemaEvent = event as SchemaAuditEvent;
-    if (!schemaEvent.trusted) return null;
+    if (schemaEvent.trusted !== true) return null;
 
     return this.buildAlert({
       ruleId: "trustedToolSchemaFail",
