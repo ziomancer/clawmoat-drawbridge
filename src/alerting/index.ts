@@ -69,8 +69,9 @@ export class AlertManager {
           tier3Enabled: true, // ALWAYS true — cannot be disabled
         },
         trustedToolSchemaFail: {
-          ...DEFAULT_ALERT_RULES.trustedToolSchemaFail,
-          ...config?.rules?.trustedToolSchemaFail,
+          enabled: config?.rules?.trustedToolSchemaFail?.enabled
+            ?? DEFAULT_ALERT_RULES.trustedToolSchemaFail?.enabled
+            ?? true,
         },
       },
       rateLimit: {
