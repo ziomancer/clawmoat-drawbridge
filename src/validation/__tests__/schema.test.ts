@@ -159,6 +159,79 @@ describe("SchemaValidator", () => {
     expect(result.violations).toHaveLength(0);
   });
 
+  // 36a. Constructor rejects toolSchemas key with multiple colons
+  it("36a. constructor throws on key with multiple colons", () => {
+    expect(() => createValidator({
+      toolSchemas: { "my:server:tool": { variants: { default: {} } } },
+    })).toThrow(/invalid toolSchemas key/);
+  });
+
+  // 36b. Constructor rejects toolSchemas key with empty component
+  it("36b. constructor throws on key with empty serverName", () => {
+    expect(() => createValidator({
+      toolSchemas: { ":tool": { variants: { default: {} } } },
+    })).toThrow(/non-empty components/);
+  });
+
+  // 36c. validate() rejects serverName containing colon
+  it("36c. validate rejects serverName with colon", () => {
+    const v = createValidator();
+    const result = v.validate({ foo: 1 }, "my:server", "tool");
+    expect(result.pass).toBe(false);
+    expect(result.ruleIds).toContain("schema.invalid-key");
+  });
+
+  // 36d. validate() rejects toolName containing colon
+  it("36d. validate rejects toolName with colon", () => {
+    const v = createValidator();
+    const result = v.validate({ foo: 1 }, "server", "my:tool");
+    expect(result.pass).toBe(false);
+    expect(result.ruleIds).toContain("schema.invalid-key");
+  });
+
+  // 36e. Missing discriminant field → schema.missing-field
+  it("36e. missing discriminant field returns schema.missing-field", () => {
+    const schema: ToolOutputSchema = {
+      discriminant: "type",
+      variants: { success: { required: ["data"] } },
+    };
+    const v = createValidator({ toolSchemas: { "srv:tool": schema } });
+
+    const result = v.validate({ data: "hi" }, "srv", "tool"); // no "type" field
+    expect(result.pass).toBe(false);
+    expect(result.ruleIds).toContain("schema.missing-field");
+    expect(result.violations[0]).toContain("Missing discriminant");
+  });
+
+  // 36f. Non-string discriminant value → schema.type-mismatch with type message
+  it("36f. non-string discriminant value returns type-mismatch", () => {
+    const schema: ToolOutputSchema = {
+      discriminant: "status",
+      variants: { ok: { required: [] } },
+    };
+    const v = createValidator({ toolSchemas: { "srv:tool": schema } });
+
+    const result = v.validate({ status: 200 }, "srv", "tool");
+    expect(result.pass).toBe(false);
+    expect(result.ruleIds).toContain("schema.type-mismatch");
+    expect(result.violations[0]).toContain("must be a string");
+  });
+
+  // 36g. Multi-variant schema without discriminant → schema.misconfiguration
+  it("36g. multi-variant without discriminant fails as misconfiguration", () => {
+    const schema: ToolOutputSchema = {
+      variants: {
+        a: { required: ["x"] },
+        b: { required: ["y"] },
+      },
+    };
+    const v = createValidator({ toolSchemas: { "srv:tool": schema } });
+
+    const result = v.validate({ x: 1 }, "srv", "tool");
+    expect(result.pass).toBe(false);
+    expect(result.ruleIds).toContain("schema.misconfiguration");
+  });
+
   // 36. Multiple violations → all reported
   it("36. multiple violations all reported", () => {
     const schema: ToolOutputSchema = {

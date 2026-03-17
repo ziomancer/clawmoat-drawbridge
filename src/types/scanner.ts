@@ -105,12 +105,18 @@ export interface SanitizeConfig {
    */
   includeRuleId: boolean;
 
-  /** Whether to include content hashes in redaction details. Default: false */
+  /**
+   * Whether to include content hashes in redaction details. Default: false.
+   * When true, an HMAC-SHA256 is computed for each redacted substring using
+   * `hmacKey`. If `hmacKey` is absent, hashes are omitted (empty string)
+   * rather than falling back to bare SHA-256.
+   */
   hashRedactions?: boolean;
 
   /**
-   * HMAC key for redaction hashes. Required if hashRedactions is true.
-   * Without a key, hashes are omitted entirely — no bare SHA-256.
+   * HMAC key for redaction hashes. Optional — when `hashRedactions` is true
+   * but `hmacKey` is not provided, redaction hashes are empty strings.
+   * No bare SHA-256 is ever emitted.
    */
   hmacKey?: string;
 }

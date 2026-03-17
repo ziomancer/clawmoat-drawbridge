@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { DrawbridgePipeline } from "../index.js";
 import type { DrawbridgePipelineConfig, PipelineInput } from "../../types/pipeline.js";
 import type { ClawMoatScanResult, ClawMoatFinding } from "../../types/scanner.js";
-import { createHash } from "node:crypto";
 import type { TypedAuditEvent, OutputDiffEvent, SchemaAuditEvent } from "../../types/audit.js";
 import type { AlertPayload } from "../../types/alerting.js";
 import type { ToolOutputSchema } from "../../types/validation.js";
@@ -872,10 +871,6 @@ describe("DrawbridgePipeline", () => {
       matched: "ignore previous instructions",
       position: 0,
     });
-
-    function sha256(content: string): string {
-      return createHash("sha256").update(content, "utf8").digest("hex");
-    }
 
     function getOutputDiffEvents(events: TypedAuditEvent[]): OutputDiffEvent[] {
       return events.filter((e): e is OutputDiffEvent => e.event === "output_diff");

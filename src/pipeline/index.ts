@@ -42,6 +42,11 @@ import type { FrequencyUpdateResult, EscalationTier, SessionSuspicionState } fro
 import type { ResolvedProfile } from "../types/profiles.js";
 import { DEFAULT_HARD_BLOCK_RULES } from "../types/validation.js";
 
+/** Parse a JSON string, returning the original string on failure. */
+function parseOrFallback(content: string): unknown {
+  try { return JSON.parse(content); } catch { return content; }
+}
+
 /** Full pipeline orchestration: routes content through validation, scanning, frequency tracking, and audit */
 export class DrawbridgePipeline {
   private readonly scanner: DrawbridgeScanner;
@@ -729,7 +734,7 @@ export class DrawbridgePipeline {
     const parsedContent = typeof input.content !== "string" ? input.content : undefined;
     const contentForSchema = parsedContent !== undefined
       ? parsedContent
-      : (() => { try { return JSON.parse(content); } catch { return content; } })();
+      : parseOrFallback(content);
 
     const schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
     const trusted = this._trustedServers.includes(input.serverName);

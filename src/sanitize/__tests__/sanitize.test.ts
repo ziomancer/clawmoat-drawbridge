@@ -294,6 +294,23 @@ describe("sanitizeContent — fallbackRedactions", () => {
     expect(result.redactedRuleIds).toContain("r.2");
     expect(result.fallbackRedactions).toBe(2); // two occurrences of "aaa" via fallback
   });
+
+  it("overlapping fallback matches merge correctly and fallbackRedactions reflects post-merge count", () => {
+    // "inject" at 5–11, "nject" at 6–11 — both fallback, ranges overlap
+    const content = "the inject is bad";
+    const findings = [
+      makeFinding({ ruleId: "r.a", matched: "inject", position: -1 }),
+      makeFinding({ ruleId: "r.b", matched: "nject", position: -1 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    // Ranges merge into a single redaction covering "inject"
+    expect(result.redactionCount).toBe(1);
+    expect(result.fallbackRedactions).toBe(result.redactions.filter(r => r.fallback).length);
+    expect(result.redactions[0]!.fallback).toBe(true);
+    expect(result.sanitized).toContain("[REDACTED]");
+    expect(result.redactedRuleIds.length).toBeGreaterThan(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
