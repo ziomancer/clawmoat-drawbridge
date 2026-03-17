@@ -315,11 +315,11 @@ export class PreFilter {
 // ---------------------------------------------------------------------------
 
 function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "array" | "null" {
-  if (value === null) return "null";
+  if (value === null || value === undefined) return "null";
   if (Array.isArray(value)) return "array";
   const t = typeof value;
   if (t === "string" || t === "number" || t === "boolean" || t === "object") return t;
-  // function, symbol, bigint, undefined — not valid JSON types
+  // function, symbol, bigint — not valid JSON types
   return "object";
 }
 
@@ -403,8 +403,17 @@ export class SchemaValidator {
       }
       variant = schema.variants[discriminantValue];
     } else {
-      // No discriminant — use single variant (first key)
+      // No discriminant — expect a single-key variant map
       const keys = Object.keys(schema.variants);
+      if (keys.length > 1) {
+        return {
+          pass: false,
+          violations: [
+            `Schema misconfiguration: ${keys.length} variants defined but no discriminant field set`,
+          ],
+          ruleIds: ["schema.misconfiguration"],
+        };
+      }
       variant = keys.length > 0 ? schema.variants[keys[0]!] : undefined;
     }
 
