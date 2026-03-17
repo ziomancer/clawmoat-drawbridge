@@ -284,7 +284,7 @@ describe("DrawbridgeScanner", () => {
     expect(scanner.engine).toBe(mock);
   });
 
-  // 17. Fix #8: onFinding callback mutation doesn't corrupt scanner result
+  // 19. Fix #8: onFinding callback mutation doesn't corrupt scanner result
   it("onFinding callback mutating source.position does not affect scanner result", () => {
     const finding = makeFinding({ position: 5, matched: "test" });
     const mock = createMockClawMoat(() => makeResult({ inbound: [finding] }));
@@ -305,7 +305,7 @@ describe("DrawbridgeScanner", () => {
     expect(result.findings[0]!.source.matched).toBe("test");
   });
 
-  // 18. Fix #8: scanner findings are independent copies
+  // 20. Fix #8: scanner findings are independent copies
   it("scanner result findings have independent source copies", () => {
     const f1 = makeFinding({ position: 0, matched: "aaa", type: "t1", subtype: "s1" });
     const f2 = makeFinding({ position: 10, matched: "bbb", type: "t2", subtype: "s2" });

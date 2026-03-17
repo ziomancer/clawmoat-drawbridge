@@ -1184,7 +1184,7 @@ describe("DrawbridgePipeline", () => {
   // =========================================================================
 
   describe("error isolation", () => {
-    it("41. consumer onEvent throws -> pipeline doesn't crash", () => {
+    it("46. consumer onEvent throws -> pipeline doesn't crash", () => {
       const pipeline = new DrawbridgePipeline({
         engine: createMockClawMoat(),
         audit: {
@@ -1198,7 +1198,7 @@ describe("DrawbridgePipeline", () => {
       expect(() => pipeline.inspect(cleanInput())).not.toThrow();
     });
 
-    it("42. all stages complete even if audit throws mid-flow", () => {
+    it("47. all stages complete even if audit throws mid-flow", () => {
       let callCount = 0;
       const pipeline = new DrawbridgePipeline({
         engine: createMockClawMoat(),
