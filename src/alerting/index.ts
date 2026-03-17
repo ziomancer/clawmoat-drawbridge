@@ -303,7 +303,7 @@ export class AlertManager {
       agentId: event.agentId,
       summary: `Trusted tool ${schemaEvent.serverName}:${schemaEvent.toolName} produced structurally invalid output`,
       triggeringEvents: [event],
-      ruleConfig: {},
+      ruleConfig: { enabled: rule.enabled },
     });
   }
 
