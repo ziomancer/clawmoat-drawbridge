@@ -6,7 +6,7 @@
  * will feed findings from both stages into sanitizeContent().
  */
 
-import { createHash } from "node:crypto";
+import { sha256 } from "../lib/sha256.js";
 import type {
   DrawbridgeFinding,
   RedactionDetail,
@@ -27,10 +27,6 @@ interface RedactionRange {
 
 function severityRank(severity: string): number {
   return isSeverity(severity) ? SEVERITY_RANK[severity] : SEVERITY_RANK.critical;
-}
-
-function sha256(content: string): string {
-  return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
 /**

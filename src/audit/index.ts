@@ -9,8 +9,6 @@
  * designed for single-threaded Node.js event loop.
  */
 
-import { createHash } from "node:crypto";
-
 import type {
   AuditEmitterConfig,
   TypedAuditEvent,
@@ -33,10 +31,8 @@ import {
   DEFAULT_AUDIT_CONFIG,
 } from "../types/audit.js";
 
-/** Compute SHA-256 hash of a string (convenience for output_diff) */
-export function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
+import { sha256 } from "../lib/sha256.js";
+export { sha256 };
 
 export class AuditEmitter {
   private readonly config: AuditEmitterConfig;
