@@ -256,14 +256,6 @@ export class DrawbridgePipeline {
       }
     }
 
-    // --- Stage 1b: Schema validation (MCP sources only) ---
-    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
-
-    // Schema violations are structural (type/format issues), not injection signals.
-    // They are tracked via audit events and the trustedToolSchemaFail alert rule,
-    // but excluded from frequency/suspicion scoring to avoid false escalation
-    // from legitimate tools with schema mismatches.
-
     // --- Frequency update: pre-filter findings ---
     // Syntactic pre-filter findings contribute to suspicion — defense in depth
     let frequencyResult: FrequencyUpdateResult | null = null;
@@ -280,7 +272,7 @@ export class DrawbridgePipeline {
           safe: false,
           trusted: false,
           preFilterResult,
-          schemaResult,
+          schemaResult: null,
           scanResult: null,
           sanitizeResult: null,
           escalationTier: "tier3",
@@ -312,6 +304,13 @@ export class DrawbridgePipeline {
         }
       }
     }
+
+    // --- Stage 1b: Schema validation (MCP sources only) ---
+    // Runs after the two-pass gate so hard-blocked content doesn't trigger
+    // schema events or trustedToolSchemaFail alerts for already-rejected input.
+    // Schema violations are structural (type/format issues), not injection signals —
+    // tracked via audit events but excluded from frequency/suspicion scoring.
+    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
 
     // --- Stage 2: Scanner (ClawMoat) ---
     let scanResult: DrawbridgeScanResult | null = null;
@@ -736,9 +735,7 @@ export class DrawbridgePipeline {
           ruleIds: ["schema.invalid-key"],
           serverName: input.serverName ?? "<unknown>",
           toolName: input.toolName ?? "<unknown>",
-          trusted: input.serverName
-            ? this._trustedServers.includes(input.serverName)
-            : false,
+          trusted: false, // misconfiguration, not a content violation — never fire trustedToolSchemaFail
         }),
         events,
         alerts,
