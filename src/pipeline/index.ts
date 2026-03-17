@@ -422,7 +422,6 @@ export class DrawbridgePipeline {
                 ruleId: r.ruleId,
                 lengthBefore: r.matchedLength,
                 lengthAfter: r.replacement.length,
-                contentHash: r.sha256,
                 fallback: r.fallback,
               })),
             }),

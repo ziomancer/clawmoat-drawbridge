@@ -125,11 +125,9 @@ function measureJsonDepth(value: unknown, current = 0, limit = 100): number {
 /** Syntactic pre-filter: pattern matching and structural checks before semantic analysis */
 export class PreFilter {
   private readonly config: SyntacticFilterConfig;
-  private readonly schemaValidator: SchemaValidator | null;
 
-  constructor(config?: Partial<SyntacticFilterConfig>, schemaConfig?: Partial<SchemaValidationConfig>) {
+  constructor(config?: Partial<SyntacticFilterConfig>) {
     this.config = { ...DEFAULT_SYNTACTIC_CONFIG, ...config };
-    this.schemaValidator = schemaConfig ? new SchemaValidator(schemaConfig) : null;
 
     const MAX_ALLOWED_DEPTH = 1_000; // 2x cap in measureJsonDepth → max ~2k frames, well within stack
     if (!Number.isFinite(this.config.maxJsonDepth) || this.config.maxJsonDepth <= 0) {
@@ -293,24 +291,6 @@ export class PreFilter {
     return this.run(typeof content === "string" ? content : safeStringify(content));
   }
 
-  /**
-   * Validate content against a tool's declared output schema.
-   * Returns `pass: true` with empty violations if no `schemaConfig` was provided
-   * to the PreFilter constructor — schema validation is not performed.
-   */
-  validateSchema(
-    content: unknown,
-    serverName: string,
-    toolName: string,
-  ): SchemaValidationResult {
-    if (!this.schemaValidator) {
-      // Schema validation not configured — pass without validation.
-      // Callers can check for "schema.not-configured" to distinguish from a genuine pass.
-      return { pass: true, violations: [], ruleIds: ["schema.not-configured"] };
-    }
-    return this.schemaValidator.validate(content, serverName, toolName);
-  }
-
   private isSuppressed(ruleId: string): boolean {
     return this.config.suppressRules.includes(ruleId);
   }
@@ -342,7 +322,12 @@ export class SchemaValidator {
   private readonly config: SchemaValidationConfig;
 
   constructor(config?: Partial<SchemaValidationConfig>) {
-    this.config = { ...DEFAULT_SCHEMA_CONFIG, ...config };
+    this.config = {
+      ...DEFAULT_SCHEMA_CONFIG,
+      ...config,
+      // Defensive copy — prevent post-construction mutation via caller's reference
+      toolSchemas: { ...(config?.toolSchemas ?? DEFAULT_SCHEMA_CONFIG.toolSchemas) },
+    };
 
     // Validate registered schema keys at construction time — a key with
     // the wrong number of colons would be unreachable at validate() time.
