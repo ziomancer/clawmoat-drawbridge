@@ -324,8 +324,9 @@ function jsType(value: unknown): "string" | "number" | "boolean" | "object" | "a
   if (Array.isArray(value)) return "array";
   const t = typeof value;
   if (t === "string" || t === "number" || t === "boolean" || t === "object") return t;
-  // function, symbol, bigint — not valid JSON types
-  return "object";
+  // function, symbol, bigint — not valid JSON types; return "null" so they
+  // never silently match any expected schema type
+  return "null";
 }
 
 /** Validates MCP tool output against registered schemas with discriminated union support */
@@ -356,7 +357,7 @@ export class SchemaValidator {
     }
 
     const key = `${serverName}:${toolName}`;
-    const schema = this.config.toolSchemas[key];
+    const schema = this.config.toolSchemas?.[key];
 
     // No schema registered — apply defaultBehavior
     if (!schema) {
