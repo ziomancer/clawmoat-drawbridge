@@ -714,10 +714,10 @@ export class DrawbridgePipeline {
       return null;
     }
 
-    const parsedContent = typeof input.content === "string" ? undefined : input.content;
-    const contentForSchema = parsedContent != null ? parsedContent : (() => {
-      try { return JSON.parse(content); } catch { return content; }
-    })();
+    const parsedContent = typeof input.content !== "string" ? input.content : undefined;
+    const contentForSchema = parsedContent !== undefined
+      ? parsedContent
+      : (() => { try { return JSON.parse(content); } catch { return content; } })();
 
     const schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
     const trusted = this._trustedServers.includes(input.serverName);

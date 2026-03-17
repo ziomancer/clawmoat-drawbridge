@@ -426,13 +426,17 @@ export class SchemaValidator {
 
     if (schema.discriminant) {
       const discriminantValue = obj[schema.discriminant];
-      if (typeof discriminantValue !== "string" || !Object.hasOwn(schema.variants, discriminantValue)) {
-        const msg = discriminantValue === undefined
-          ? `Missing discriminant field "${schema.discriminant}"`
-          : `Unknown discriminant value "${String(discriminantValue)}" for field "${schema.discriminant}"`;
+      if (discriminantValue === undefined) {
         return {
           pass: false,
-          violations: [msg],
+          violations: [`Missing discriminant field "${schema.discriminant}"`],
+          ruleIds: ["schema.missing-field"],
+        };
+      }
+      if (typeof discriminantValue !== "string" || !Object.hasOwn(schema.variants, discriminantValue)) {
+        return {
+          pass: false,
+          violations: [`Unknown discriminant value "${String(discriminantValue)}" for field "${schema.discriminant}"`],
           ruleIds: ["schema.type-mismatch"],
         };
       }
