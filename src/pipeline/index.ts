@@ -412,6 +412,7 @@ export class DrawbridgePipeline {
                 lengthBefore: r.matchedLength,
                 lengthAfter: r.replacement.length,
                 contentHash: r.sha256,
+                fallback: r.fallback,
               })),
             }),
             events,
@@ -714,6 +715,11 @@ export class DrawbridgePipeline {
       return null;
     }
 
+    // Use the original content object when available (non-string input.content);
+    // otherwise parse the stringified form. Note: if safeStringify altered the
+    // representation (e.g. BigInt → null, circular refs → "[Circular]"), the
+    // round-tripped object will differ from the original — this is intentional,
+    // as the validator should see what downstream consumers would see.
     const parsedContent = typeof input.content !== "string" ? input.content : undefined;
     const contentForSchema = parsedContent !== undefined
       ? parsedContent

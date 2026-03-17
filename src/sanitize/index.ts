@@ -78,6 +78,8 @@ export function sanitizeContent(
     if (finding.source.position >= 0 && finding.source.position < content.length &&
         content.slice(finding.source.position, finding.source.position + matched.length) === matched) {
       // Verified position — redact exactly this occurrence.
+      // Note: if matched extends past EOF, slice returns a shorter string,
+      // the equality check fails, and the fallback path handles it safely.
       ranges.push({
         start: finding.source.position,
         end: Math.min(finding.source.position + matched.length, content.length),

@@ -221,6 +221,7 @@ export interface OutputDiffEvent extends AuditEvent {
     lengthAfter: number;
     /** HMAC-SHA256 of content before replacement if hashRedactions + hmacKey configured, otherwise empty string */
     contentHash: string;
+    fallback: boolean;
   }>;
 }
 
