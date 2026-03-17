@@ -403,7 +403,11 @@ export class SchemaValidator {
     }
 
     if (!variant) {
-      return { pass: true, violations: [], ruleIds: [] };
+      return {
+        pass: false,
+        violations: ["Schema misconfiguration: no applicable variant found"],
+        ruleIds: ["schema.misconfiguration"],
+      };
     }
 
     // Check required fields
