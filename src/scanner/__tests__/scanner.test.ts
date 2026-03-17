@@ -305,16 +305,17 @@ describe("DrawbridgeScanner", () => {
     expect(result.findings[0]!.source.matched).toBe("test");
   });
 
-  // 20. Fix #8: scanner findings are independent copies
-  it("scanner result findings have independent source copies", () => {
+  // 20. Fix #8: scanner findings are independent copies (input mutation safe)
+  it("scanner result findings are decoupled from input findings", () => {
     const f1 = makeFinding({ position: 0, matched: "aaa", type: "t1", subtype: "s1" });
-    const f2 = makeFinding({ position: 10, matched: "bbb", type: "t2", subtype: "s2" });
-    const mock = createMockClawMoat(() => makeResult({ inbound: [f1, f2] }));
+    const mock = createMockClawMoat(() => makeResult({ inbound: [f1] }));
     const scanner = new DrawbridgeScanner(undefined, mock);
     const result = scanner.scan("test");
 
-    // Mutating one finding's source should not affect the other
-    result.findings[0]!.source.position = 999;
-    expect(result.findings[1]!.source.position).toBe(10);
+    // Mutating the original input finding must not affect the scan result
+    f1.position = 999;
+    f1.matched = "CORRUPTED";
+    expect(result.findings[0]!.source.position).toBe(0);
+    expect(result.findings[0]!.source.matched).toBe("aaa");
   });
 });

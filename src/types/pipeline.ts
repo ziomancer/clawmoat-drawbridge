@@ -47,7 +47,7 @@ export interface PipelineResult {
   /** Pre-filter result (null if trusted fast-path or pre-filter disabled) */
   preFilterResult: SyntacticFilterResult | null;
 
-  /** Schema validation result (null if not MCP source or schema validation disabled) */
+  /** Schema validation result (null if schema validation disabled, source is not MCP, or MCP tool not fully identified) */
   schemaResult: SchemaValidationResult | null;
 
   /** Scanner result (null if trusted fast-path, or skipped by two-pass) */

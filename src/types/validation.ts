@@ -83,7 +83,7 @@ export interface SchemaValidationConfig {
   /**
    * Default behavior for tools without a registered schema.
    * "strict" = reject bare primitives, require JSON object/array
-   * "lenient" = accept any JSON value, flag but pass
+   * "lenient" = accept any JSON value and pass (ruleIds: ["schema.no-schema-registered"])
    * Default: "strict"
    */
   defaultBehavior: "strict" | "lenient";

@@ -370,7 +370,7 @@ export class SchemaValidator {
 
   private validateDefault(content: unknown): SchemaValidationResult {
     if (this.config.defaultBehavior === "lenient") {
-      return { pass: true, violations: [], ruleIds: [] };
+      return { pass: true, violations: [], ruleIds: ["schema.no-schema-registered"] };
     }
 
     // strict: content must be object or array
@@ -445,7 +445,7 @@ export class SchemaValidator {
     // Check required fields
     if (variant.required) {
       for (const field of variant.required) {
-        if (!(field in obj)) {
+        if (!Object.hasOwn(obj, field)) {
           violations.push(`Missing required field "${field}"`);
           ruleIds.add("schema.missing-field");
         }
@@ -455,7 +455,7 @@ export class SchemaValidator {
     // Check field types
     if (variant.fields) {
       for (const [field, expectedType] of Object.entries(variant.fields)) {
-        if (field in obj) {
+        if (Object.hasOwn(obj, field)) {
           const actualType = jsType(obj[field]);
           if (actualType !== expectedType) {
             violations.push(`Field "${field}" expected ${expectedType}, got ${actualType}`);
