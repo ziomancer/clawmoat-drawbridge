@@ -9,13 +9,12 @@
  * designed for single-threaded Node.js event loop.
  */
 
-import { createHash } from "node:crypto";
-
 import type {
   AuditEmitterConfig,
   TypedAuditEvent,
   ScanAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
   FrequencyAuditEvent,
   SanitizeAuditEvent,
   ProfileAuditEvent,
@@ -32,11 +31,10 @@ import {
   DEFAULT_AUDIT_CONFIG,
 } from "../types/audit.js";
 
-/** Compute SHA-256 hash of a string (convenience for output_diff) */
-export function sha256(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
-}
+import { sha256 } from "../lib/sha256.js";
+export { sha256 };
 
+/** Emits structured, verbosity-gated audit events via callbacks */
 export class AuditEmitter {
   private readonly config: AuditEmitterConfig;
   private emitCount = 0;
@@ -142,6 +140,28 @@ export class AuditEmitter {
     const event: SyntacticAuditEvent = {
       ...rest,
       event: eventType,
+      timestamp: new Date().toISOString(),
+    };
+    return this.emit(event) ? event : null;
+  }
+
+  /** Emit a schema validation result event */
+  emitSchema(params: {
+    sessionId: string;
+    pass: boolean;
+    violations: string[];
+    ruleIds: string[];
+    serverName: string;
+    toolName: string;
+    trusted?: boolean;
+    messageId?: string;
+    agentId?: string;
+    toolCallId?: string;
+    profile?: string;
+  }): SchemaAuditEvent | null {
+    const event: SchemaAuditEvent = {
+      ...params,
+      event: params.pass ? "schema_pass" : "schema_fail",
       timestamp: new Date().toISOString(),
     };
     return this.emit(event) ? event : null;

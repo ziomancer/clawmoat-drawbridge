@@ -7,7 +7,7 @@
 
 import type { AuditVerbosity } from "./common.js";
 
-// Re-export for convenience
+/** Verbosity tier (re-exported from common for convenience) */
 export type { AuditVerbosity };
 
 // ---------------------------------------------------------------------------
@@ -23,9 +23,9 @@ export type AuditEventType =
   | "syntactic_pass"
   | "syntactic_fail"
   | "syntactic_flags"
-  // Schema validation events (deferred to v1.0)
-  // | "schema_pass"
-  // | "schema_fail"
+  // Schema validation events
+  | "schema_pass"
+  | "schema_fail"
   // Frequency events
   | "frequency_escalation_tier1"
   | "frequency_escalation_tier2"
@@ -70,9 +70,12 @@ export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = Objec
   profile_loaded: "minimal",
   audit_config_loaded: "minimal",
 
+  schema_fail: "minimal",
+
   // Standard tier — pass events and summaries
   scan_pass: "standard",
   syntactic_pass: "standard",
+  schema_pass: "standard",
   syntactic_flags: "standard",
   flags_summary: "standard",
   content_sanitized: "standard",
@@ -129,6 +132,17 @@ export interface SyntacticAuditEvent extends AuditEvent {
   flags: string[];
 }
 
+/** schema_pass / schema_fail */
+export interface SchemaAuditEvent extends AuditEvent {
+  event: "schema_pass" | "schema_fail";
+  pass: boolean;
+  violations: string[];
+  ruleIds: string[];
+  serverName: string;
+  toolName: string;
+  trusted?: boolean;
+}
+
 /** frequency_escalation_tier1/2/3 */
 export interface FrequencyAuditEvent extends AuditEvent {
   event:
@@ -183,19 +197,29 @@ export interface RuleTriggeredEvent extends AuditEvent {
   stage: "scanner" | "syntactic";
 }
 
-/** output_diff (high tier) */
+/**
+ * output_diff (high tier).
+ *
+ * `removals` and `replacements` are parallel arrays — `removals[i]` and
+ * `replacements[i]` describe the same physical redaction. Do not filter
+ * or reorder one array independently without applying the same operation
+ * to the other.
+ */
 export interface OutputDiffEvent extends AuditEvent {
   event: "output_diff";
   removals: Array<{
     ruleId: string;
+    position: number;
     matchedLength: number;
-    sha256: string;
+    /** HMAC-SHA256 of removed content if hashRedactions + hmacKey configured, otherwise empty string */
+    contentHash: string;
+    fallback: boolean;
   }>;
   replacements: Array<{
     ruleId: string;
     lengthBefore: number;
     lengthAfter: number;
-    sha256Before: string;
+    fallback: boolean;
   }>;
 }
 
@@ -212,6 +236,7 @@ export interface RawCaptureEvent extends AuditEvent {
 export type TypedAuditEvent =
   | ScanAuditEvent
   | SyntacticAuditEvent
+  | SchemaAuditEvent
   | FrequencyAuditEvent
   | SanitizeAuditEvent
   | ProfileAuditEvent
@@ -253,6 +278,7 @@ export interface AuditEmitterConfig {
   alertingEnabled: boolean;
 }
 
+/** Default audit emitter configuration */
 export const DEFAULT_AUDIT_CONFIG: AuditEmitterConfig = {
   enabled: true,
   verbosity: "standard",

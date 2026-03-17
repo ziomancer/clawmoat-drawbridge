@@ -1,7 +1,16 @@
+import { createHash, createHmac } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { sanitizeContent } from "../index.js";
 import { DrawbridgeScanner } from "../../scanner/index.js";
 import type { DrawbridgeFinding, ClawMoatFinding } from "../../types/scanner.js";
+
+function expectedSha256(content: string): string {
+  return createHash("sha256").update(content, "utf8").digest("hex");
+}
+
+function expectedHmac(content: string, key: string): string {
+  return createHmac("sha256", key).update(content).digest("hex");
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -225,6 +234,86 @@ describe("sanitizeContent — filtering", () => {
 });
 
 // ---------------------------------------------------------------------------
+// fallbackRedactions counter
+// ---------------------------------------------------------------------------
+
+describe("sanitizeContent — fallbackRedactions", () => {
+  it("valid position, unique match → fallbackRedactions=0", () => {
+    const content = "the secret is here";
+    const findings = [
+      makeFinding({ ruleId: "r.x", matched: "secret", position: 4 }),
+    ];
+    const result = sanitizeContent(content, findings);
+    expect(result.sanitized).toBe("the [REDACTED] is here");
+    expect(result.fallbackRedactions).toBe(0);
+  });
+
+  it("no position, match appears 3 times → all 3 redacted, fallbackRedactions=3", () => {
+    const content = "bad and bad and bad";
+    const findings = [
+      makeFinding({ ruleId: "r.x", matched: "bad", position: -1 }),
+    ];
+    const result = sanitizeContent(content, findings);
+    expect(result.sanitized).toBe("[REDACTED] and [REDACTED] and [REDACTED]");
+    expect(result.fallbackRedactions).toBe(3);
+  });
+
+  it("valid position, match appears multiple times → only position-verified redacted, fallbackRedactions=0", () => {
+    const content = "bad and bad again";
+    const findings = [
+      makeFinding({ ruleId: "r.x", matched: "bad", position: 0 }),
+    ];
+    const result = sanitizeContent(content, findings);
+    expect(result.sanitized).toBe("[REDACTED] and bad again");
+    expect(result.fallbackRedactions).toBe(0);
+  });
+
+  it("invalid position (verification fails), match appears twice → falls back, both redacted", () => {
+    const content = "bad and bad again";
+    const findings = [
+      makeFinding({ ruleId: "r.x", matched: "bad", position: 5 }), // position 5 is "and", not "bad"
+    ];
+    const result = sanitizeContent(content, findings);
+    expect(result.sanitized).toBe("[REDACTED] and [REDACTED] again");
+    expect(result.fallbackRedactions).toBe(2);
+  });
+
+  it("no findings → fallbackRedactions=0", () => {
+    const result = sanitizeContent("safe content", []);
+    expect(result.fallbackRedactions).toBe(0);
+  });
+
+  it("mixed: some with valid positions, some without → counts only fallbacks", () => {
+    const content = "aaa bbb aaa";
+    const findings = [
+      makeFinding({ ruleId: "r.1", matched: "bbb", position: 4 }), // valid position
+      makeFinding({ ruleId: "r.2", matched: "aaa", position: -1 }), // fallback
+    ];
+    const result = sanitizeContent(content, findings);
+    expect(result.redactedRuleIds).toContain("r.1");
+    expect(result.redactedRuleIds).toContain("r.2");
+    expect(result.fallbackRedactions).toBe(2); // two occurrences of "aaa" via fallback
+  });
+
+  it("overlapping fallback matches merge correctly and fallbackRedactions reflects post-merge count", () => {
+    // "inject" at 5–11, "nject" at 6–11 — both fallback, ranges overlap
+    const content = "the inject is bad";
+    const findings = [
+      makeFinding({ ruleId: "r.a", matched: "inject", position: -1 }),
+      makeFinding({ ruleId: "r.b", matched: "nject", position: -1 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    // Ranges merge into a single redaction covering "inject"
+    expect(result.redactionCount).toBe(1);
+    expect(result.fallbackRedactions).toBe(result.redactions.filter(r => r.fallback).length);
+    expect(result.redactions[0]!.fallback).toBe(true);
+    expect(result.sanitized).toContain("[REDACTED]");
+    expect(result.redactedRuleIds.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Placeholder config (tests 12–14)
 // ---------------------------------------------------------------------------
 
@@ -362,5 +451,158 @@ describe("sanitizeContent — scanner integration", () => {
     const result = scanner.scanAndSanitize("hello world");
     expect(result.sanitized.sanitized).toBe("hello world");
     expect(result.sanitized.redactionCount).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RedactionDetail (Phase B tests 16–20)
+// ---------------------------------------------------------------------------
+
+describe("sanitizeContent — RedactionDetail", () => {
+  // 16. Single redaction → correct detail fields (default: no hash)
+  it("single redaction has correct position, matchedLength, contentHash, replacement", () => {
+    const content = "the secret token is here";
+    const findings = [
+      makeFinding({ ruleId: "r.secret", matched: "secret token", position: 4 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions).toHaveLength(1);
+    const detail = result.redactions[0]!;
+    expect(detail.ruleId).toBe("r.secret");
+    expect(detail.position).toBe(4);
+    expect(detail.matchedLength).toBe(12); // "secret token".length
+    expect(detail.contentHash).toBe("");
+    expect(detail.replacement).toBe("[REDACTED]");
+    expect(detail.fallback).toBe(false);
+  });
+
+  // 17. Multiple redactions → each has independent detail
+  it("multiple redactions each have independent detail", () => {
+    const content = "AAA BBB CCC";
+    const findings = [
+      makeFinding({ ruleId: "r.a", matched: "AAA", position: 0 }),
+      makeFinding({ ruleId: "r.c", matched: "CCC", position: 8 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions).toHaveLength(2);
+    // Redactions are in ascending position order
+    expect(result.redactions[0]!.ruleId).toBe("r.a");
+    expect(result.redactions[0]!.position).toBe(0);
+    expect(result.redactions[0]!.contentHash).toBe("");
+    expect(result.redactions[1]!.ruleId).toBe("r.c");
+    expect(result.redactions[1]!.position).toBe(8);
+    expect(result.redactions[1]!.contentHash).toBe("");
+  });
+
+  // 18. Fallback redaction → fallback: true, position reflects indexOf
+  it("fallback redaction sets fallback: true with indexOf position", () => {
+    const content = "the bad phrase is here";
+    const findings = [
+      makeFinding({ ruleId: "r.x", matched: "bad phrase", position: -1 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions).toHaveLength(1);
+    const detail = result.redactions[0]!;
+    expect(detail.fallback).toBe(true);
+    expect(detail.position).toBe(4); // "the ".length = 4
+    expect(detail.matchedLength).toBe(10);
+    expect(detail.contentHash).toBe("");
+  });
+
+  // 19. Default config → contentHash is empty (no bare hashes)
+  it("default config produces empty contentHash — no bare hashes emitted", () => {
+    const content = "remove this secret";
+    const findings = [
+      makeFinding({ ruleId: "r.a", matched: "secret", position: 12 }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions[0]!.contentHash).toBe("");
+  });
+
+  // 20. Overlapping findings merged → single RedactionDetail spanning merged range
+  it("overlapping findings produce single merged RedactionDetail", () => {
+    const content = "ABCDEFGHIJ";
+    const findings = [
+      makeFinding({ ruleId: "r.first", matched: "ABCDE", position: 0, severity: "high" }),
+      makeFinding({ ruleId: "r.second", matched: "DEFGH", position: 3, severity: "critical" }),
+    ];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions).toHaveLength(1);
+    const detail = result.redactions[0]!;
+    // Merged range: 0–8, ruleId from higher severity
+    expect(detail.ruleId).toBe("r.second");
+    expect(detail.position).toBe(0);
+    expect(detail.matchedLength).toBe(8); // "ABCDEFGH"
+    expect(detail.contentHash).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HMAC redaction hashing (tests 21–26)
+// ---------------------------------------------------------------------------
+
+describe("sanitizeContent — HMAC redaction hashing", () => {
+  const hmacConfig = { hashRedactions: true, hmacKey: "test-secret-key" };
+
+  // 21. Default config → contentHash is empty string
+  it("21. default config → redactions[].contentHash is empty string", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result = sanitizeContent(content, findings);
+
+    expect(result.redactions[0]!.contentHash).toBe("");
+  });
+
+  // 22. hashRedactions: true without hmacKey → contentHash is empty string (safe fallback)
+  it("22. hashRedactions without hmacKey → contentHash is empty string", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result = sanitizeContent(content, findings, { hashRedactions: true });
+
+    expect(result.redactions[0]!.contentHash).toBe("");
+  });
+
+  // 23. hashRedactions: true with hmacKey → contentHash is valid HMAC hex string
+  it("23. hashRedactions + hmacKey → contentHash is valid HMAC hex", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result = sanitizeContent(content, findings, hmacConfig);
+
+    expect(result.redactions[0]!.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.redactions[0]!.contentHash).toBe(expectedHmac("secret", "test-secret-key"));
+  });
+
+  // 24. Same content + same key → same HMAC (deterministic for correlation)
+  it("24. same content + same key → deterministic HMAC", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result1 = sanitizeContent(content, findings, hmacConfig);
+    const result2 = sanitizeContent(content, findings, hmacConfig);
+
+    expect(result1.redactions[0]!.contentHash).toBe(result2.redactions[0]!.contentHash);
+  });
+
+  // 25. Same content + different key → different HMAC (key matters)
+  it("25. same content + different key → different HMAC", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result1 = sanitizeContent(content, findings, { hashRedactions: true, hmacKey: "key-A" });
+    const result2 = sanitizeContent(content, findings, { hashRedactions: true, hmacKey: "key-B" });
+
+    expect(result1.redactions[0]!.contentHash).not.toBe(result2.redactions[0]!.contentHash);
+  });
+
+  // 26. HMAC value differs from bare SHA-256 (not brute-forceable without key)
+  it("26. HMAC differs from bare SHA-256 of same content", () => {
+    const content = "the secret is here";
+    const findings = [makeFinding({ ruleId: "r.a", matched: "secret", position: 4 })];
+    const result = sanitizeContent(content, findings, hmacConfig);
+
+    expect(result.redactions[0]!.contentHash).not.toBe(expectedSha256("secret"));
   });
 });

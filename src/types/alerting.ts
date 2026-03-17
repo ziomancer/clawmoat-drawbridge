@@ -24,8 +24,8 @@ export type AlertRuleId =
   | "frequencyEscalationTier2"
   | "frequencyEscalationTier3"
   | "scanBlockAfterSyntacticPass"
-  | "writeFailSpike";
-// trustedToolSchemaFail deferred to v1.0
+  | "writeFailSpike"
+  | "trustedToolSchemaFail";
 
 /** Alert payload delivered to consumers */
 export interface AlertPayload {
@@ -88,6 +88,13 @@ export interface AlertRuleConfigs {
     /** Time window in minutes. Default: 5 */
     windowMinutes: number;
   };
+  /**
+   * Alert Rule 2: fire on schema_fail from a trusted server.
+   * Optional for backward compatibility — defaults to `{ enabled: true }` when absent.
+   */
+  trustedToolSchemaFail?: {
+    enabled: boolean;
+  };
 }
 
 /** Alert manager configuration */
@@ -123,6 +130,7 @@ export interface AlertManagerConfig {
   onError?: (error: unknown, alert: AlertPayload) => void;
 }
 
+/** Default alert rule configuration */
 export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
   syntacticFailBurst: {
     enabled: true,
@@ -142,8 +150,12 @@ export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
     count: 3,
     windowMinutes: 5,
   },
+  trustedToolSchemaFail: {
+    enabled: true,
+  },
 };
 
+/** Default alert manager configuration */
 export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = {
   enabled: true,
   rules: DEFAULT_ALERT_RULES,

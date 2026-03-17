@@ -19,6 +19,7 @@ export interface SyntacticFilterConfig {
   suppressRules: string[];
 }
 
+/** Default syntactic pre-filter configuration */
 export const DEFAULT_SYNTACTIC_CONFIG: SyntacticFilterConfig = {
   maxPayloadBytes: 524_288,
   maxJsonDepth: 10,
@@ -36,6 +37,17 @@ export interface SyntacticFilterResult {
 export interface SchemaValidationResult {
   pass: boolean;
   violations: string[];
+  /**
+   * Rule IDs associated with this result.
+   *
+   * On **fail** events these identify which rules caused the failure
+   * (e.g. `"schema.missing-field"`, `"schema.type-mismatch"`).
+   *
+   * On **pass** events this may contain informational IDs such as
+   * `"schema.no-schema-registered"` to indicate no schema was matched —
+   * consumers should not treat a non-empty array as an error signal
+   * without also checking `pass`.
+   */
   ruleIds: string[];
 }
 
@@ -48,6 +60,82 @@ export interface PreFilterResult {
   /** Combined ruleIds from both stages */
   allRuleIds: string[];
 }
+
+// ---------------------------------------------------------------------------
+// Schema validation types
+// ---------------------------------------------------------------------------
+
+/**
+ * Tool output schema declaration.
+ *
+ * Registered schemas only validate object-typed tool outputs. Tools that
+ * return top-level arrays will fail with `schema.type-mismatch` — leave
+ * such tools unregistered to use `validateDefault` instead.
+ */
+export interface ToolOutputSchema {
+  /**
+   * Discriminant field name for polymorphic responses (e.g. "type", "status").
+   * The field's value in the content object must be a string matching one of
+   * the keys in `variants`. Non-string discriminant values (e.g. numeric
+   * status codes) are not supported and will produce a type-mismatch violation.
+   */
+  discriminant?: string;
+  /** Schema variants keyed by discriminant value. If no discriminant, use a single-key map. */
+  variants: Record<string, FieldSchema>;
+}
+
+/**
+ * Field-level schema (simple validation, not full JSON Schema).
+ *
+ * Fields listed in `fields` but not in `required` are optional: their absence
+ * produces no violation, but if present their type is checked. There is no way
+ * to express "must be present AND must be type X" other than including the field
+ * in both `required` and `fields`.
+ */
+export interface FieldSchema {
+  /** Required field names */
+  required?: string[];
+  /**
+   * Field type expectations: field name → expected type (checked only when field is present).
+   *
+   * There is no union type support — a nullable field (e.g. `object | null`) cannot
+   * be expressed. Either omit the field from `fields` to skip type checking, or
+   * register it as `"null"` to accept only null values.
+   */
+  fields?: Record<string, "string" | "number" | "boolean" | "object" | "array" | "null">;
+  /**
+   * Whether extra fields beyond those declared are allowed. Default: false.
+   *
+   * When both `required` and `fields` are omitted, this defaults to false,
+   * meaning ALL fields in the content object are treated as unexpected.
+   * Set `allowExtra: true` for a variant that allows any object structure.
+   */
+  allowExtra?: boolean;
+}
+
+/** Schema validation configuration */
+export interface SchemaValidationConfig {
+  enabled: boolean;
+  /**
+   * Registered tool schemas. Key is "serverName:toolName".
+   * Used by the pipeline to validate MCP tool results.
+   */
+  toolSchemas: Record<string, ToolOutputSchema>;
+  /**
+   * Default behavior for tools without a registered schema.
+   * "strict" = reject bare primitives, require JSON object/array
+   * "lenient" = accept any JSON value and pass (ruleIds: ["schema.no-schema-registered"])
+   * Default: "strict"
+   */
+  defaultBehavior: "strict" | "lenient";
+}
+
+/** Default schema validation configuration (disabled by default) */
+export const DEFAULT_SCHEMA_CONFIG: SchemaValidationConfig = {
+  enabled: false,
+  toolSchemas: {},
+  defaultBehavior: "strict",
+};
 
 /** Two-pass gating configuration */
 export interface TwoPassConfig {

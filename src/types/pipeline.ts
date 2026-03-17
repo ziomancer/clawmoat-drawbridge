@@ -8,12 +8,12 @@
 import type { DrawbridgeScanResult, DrawbridgeScannerConfig, SanitizeConfig, SanitizeResult } from "./scanner.js";
 import type { FrequencyTrackerConfig, FrequencyUpdateResult, EscalationTier } from "./frequency.js";
 import type { BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
-import type { SyntacticFilterConfig, SyntacticFilterResult, TwoPassConfig } from "./validation.js";
+import type { SyntacticFilterConfig, SyntacticFilterResult, SchemaValidationConfig, SchemaValidationResult, TwoPassConfig } from "./validation.js";
 import type { AuditEmitterConfig, TypedAuditEvent } from "./audit.js";
 import type { AlertManagerConfig, AlertPayload } from "./alerting.js";
 import type { ContentSource } from "./common.js";
 
-// Re-export for convenience
+/** Content source type (re-exported from common for convenience) */
 export type { ContentSource };
 
 /** Trust classification for MCP servers */
@@ -38,7 +38,11 @@ export interface PipelineInput {
 
 /** Full pipeline result */
 export interface PipelineResult {
-  /** Overall safety verdict -- false if ANY stage blocked */
+  /**
+   * Overall safety verdict — false if ANY injection-detection stage blocked.
+   * Does not reflect schema validation results — check `schemaResult.pass`
+   * independently for structural validity.
+   */
   safe: boolean;
 
   /** Was content from a trusted source? (bypassed full inspection) */
@@ -46,6 +50,9 @@ export interface PipelineResult {
 
   /** Pre-filter result (null if trusted fast-path or pre-filter disabled) */
   preFilterResult: SyntacticFilterResult | null;
+
+  /** Schema validation result (null if disabled, source is not MCP, or content was hard-blocked by two-pass gate) */
+  schemaResult: SchemaValidationResult | null;
 
   /** Scanner result (null if trusted fast-path, or skipped by two-pass) */
   scanResult: DrawbridgeScanResult | null;
@@ -91,6 +98,9 @@ export interface DrawbridgePipelineConfig {
 
   /** Syntactic pre-filter config. Omit to use defaults. */
   syntactic?: Partial<SyntacticFilterConfig> & { enabled?: boolean };
+
+  /** Schema validation config. Omit to use defaults (disabled). */
+  schema?: Partial<SchemaValidationConfig>;
 
   /** Two-pass gating config. Default: disabled */
   twoPass?: Partial<TwoPassConfig>;

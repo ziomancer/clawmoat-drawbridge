@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { DrawbridgePipeline } from "../index.js";
 import type { DrawbridgePipelineConfig, PipelineInput } from "../../types/pipeline.js";
 import type { ClawMoatScanResult, ClawMoatFinding } from "../../types/scanner.js";
-import type { TypedAuditEvent } from "../../types/audit.js";
+import type { TypedAuditEvent, OutputDiffEvent, SchemaAuditEvent } from "../../types/audit.js";
 import type { AlertPayload } from "../../types/alerting.js";
+import type { ToolOutputSchema } from "../../types/validation.js";
 
 // ---------------------------------------------------------------------------
 // Mock factory
@@ -293,7 +294,8 @@ describe("DrawbridgePipeline", () => {
     });
 
     it("13. twoPass hard block BUT prior frequency at tier1+ -> scanner forced", () => {
-      const scanSpy = vi.fn(() => makeCleanResult());
+      const finding = makeFinding();
+      const scanSpy = vi.fn(() => makeBlockResult([finding]));
       const { pipeline } = createTestPipeline(
         {
           twoPass: { enabled: true },
@@ -304,11 +306,10 @@ describe("DrawbridgePipeline", () => {
         scanSpy,
       );
 
-      // Build up prior frequency state
-      pipeline.frequencyModule.update("s1", [
-        "drawbridge.prompt_injection.foo",
-        "drawbridge.prompt_injection.bar",
-      ]);
+      // Build up prior frequency state through inspect (scanner returns findings
+      // with ruleIds that have weight via "drawbridge.prompt_injection.*")
+      pipeline.inspect({ content: "safe content", source: "transcript", sessionId: "s1" });
+      expect(pipeline.getSessionState("s1")!.lastScore).toBeGreaterThan(0);
 
       scanSpy.mockClear();
 
@@ -391,26 +392,9 @@ describe("DrawbridgePipeline", () => {
     });
 
     it("18. terminated session blocks without running pre-filter or scanner", () => {
-      const scanSpy = vi.fn(() => makeCleanResult());
       const finding = makeFinding();
-
-      // Use a separate mock for setup vs assertion
-      const setupMock = createMockClawMoat(() => makeBlockResult([finding]));
-      const pipeline = new DrawbridgePipeline({
-        engine: setupMock,
-        frequency: {
-          thresholds: { tier1: 1, tier2: 2, tier3: 5 },
-        },
-        audit: { verbosity: "maximum" },
-      });
-
-      // Force termination
-      while (!pipeline.inspect(injectionInput("s1")).terminated) {
-        // keep going
-      }
-
-      // Now create a new pipeline with a spy scanner to verify skip
-      const { pipeline: p2 } = createTestPipeline(
+      const scanSpy = vi.fn(() => makeBlockResult([finding]));
+      const { pipeline } = createTestPipeline(
         {
           frequency: {
             thresholds: { tier1: 1, tier2: 2, tier3: 5 },
@@ -419,15 +403,18 @@ describe("DrawbridgePipeline", () => {
         scanSpy,
       );
 
-      // Manually terminate the session via tracker
-      const tracker = p2.frequencyModule;
-      while (true) {
-        const res = tracker.update("s1", ["drawbridge.prompt_injection.foo"]);
-        if (res.terminated) break;
+      // Drive the session to termination through inspect calls
+      const MAX_ITERATIONS = 200;
+      let iterations = 0;
+      while (!pipeline.inspect(injectionInput("s1")).terminated) {
+        iterations++;
+        if (iterations >= MAX_ITERATIONS) {
+          throw new Error(`Session did not terminate after ${MAX_ITERATIONS} inspect calls`);
+        }
       }
 
       scanSpy.mockClear();
-      const result = p2.inspect({ content: "safe content", source: "transcript", sessionId: "s1" });
+      const result = pipeline.inspect({ content: "safe content", source: "transcript", sessionId: "s1" });
 
       expect(result.safe).toBe(false);
       expect(result.terminated).toBe(true);
@@ -792,27 +779,16 @@ describe("DrawbridgePipeline", () => {
   // =========================================================================
 
   describe("module access", () => {
-    it("36. pipeline.scannerModule returns the scanner", () => {
+    it("36. mutable module getters are removed", () => {
       const { pipeline } = createTestPipeline();
-      expect(pipeline.scannerModule).toBeDefined();
-      expect(typeof pipeline.scannerModule.scan).toBe("function");
+      expect((pipeline as Record<string, unknown>).scannerModule).toBeUndefined();
+      expect((pipeline as Record<string, unknown>).frequencyModule).toBeUndefined();
+      expect((pipeline as Record<string, unknown>).preFilterModule).toBeUndefined();
+      expect((pipeline as Record<string, unknown>).auditModule).toBeUndefined();
+      expect((pipeline as Record<string, unknown>).alertModule).toBeUndefined();
     });
 
-    it("37. pipeline.frequencyModule returns the tracker", () => {
-      const { pipeline } = createTestPipeline();
-      expect(pipeline.frequencyModule).toBeDefined();
-      expect(typeof pipeline.frequencyModule.update).toBe("function");
-    });
-
-    it("38. pipeline.resolvedProfile returns the frozen profile", () => {
-      const { pipeline } = createTestPipeline();
-      const profile = pipeline.resolvedProfile;
-
-      expect(profile.id).toBe("general");
-      expect(Object.isFrozen(profile)).toBe(true);
-    });
-
-    it("39. pipeline.resetSession() clears frequency state", () => {
+    it("37. getSessionState() returns snapshot — mutation doesn't affect internal state", () => {
       const finding = makeFinding();
       const { pipeline } = createTestPipeline(
         {},
@@ -820,13 +796,83 @@ describe("DrawbridgePipeline", () => {
       );
 
       pipeline.inspect(injectionInput("s1"));
-      expect(pipeline.frequencyModule.getState("s1")).not.toBeNull();
+      const state = pipeline.getSessionState("s1");
+      expect(state).not.toBeNull();
 
-      pipeline.resetSession("s1");
-      expect(pipeline.frequencyModule.getState("s1")).toBeNull();
+      // Mutate the returned snapshot
+      if (state) state.lastScore = 999;
+
+      // Internal state should be unaffected
+      const fresh = pipeline.getSessionState("s1");
+      expect(fresh!.lastScore).not.toBe(999);
     });
 
-    it("40. pipeline.clear() resets all module state", () => {
+    it("38. resolvedProfile is still accessible and frozen", () => {
+      const { pipeline } = createTestPipeline();
+      const profile = pipeline.resolvedProfile;
+
+      expect(profile.id).toBe("general");
+      expect(Object.isFrozen(profile)).toBe(true);
+    });
+
+    it("39. getAuditStats() returns non-zero after inspect, zero after clear", () => {
+      const finding = makeFinding();
+      const { pipeline } = createTestPipeline(
+        { audit: { verbosity: "maximum" } },
+        () => makeBlockResult([finding]),
+      );
+
+      pipeline.inspect(injectionInput("s1"));
+      const stats = pipeline.getAuditStats();
+      expect(stats.emitted).toBeGreaterThan(0);
+
+      pipeline.clear();
+      const after = pipeline.getAuditStats();
+      expect(after.emitted).toBe(0);
+      expect(after.dropped).toBe(0);
+      expect(after.errors).toBe(0);
+    });
+
+    it("40. getAlertStats() returns non-zero after inspect, zero after clear", () => {
+      const finding = makeFinding();
+      const { pipeline } = createTestPipeline(
+        {
+          alerting: {
+            rules: {
+              // Enable burst with low threshold so a single call fires
+              syntacticFailBurst: { enabled: true, count: 1, windowMinutes: 60 },
+            },
+          },
+        },
+        () => makeBlockResult([finding]),
+      );
+
+      pipeline.inspect(injectionInput("s1"));
+      const stats = pipeline.getAlertStats();
+      expect(stats.alerts).toBeGreaterThan(0);
+
+      pipeline.clear();
+      const after = pipeline.getAlertStats();
+      expect(after.alerts).toBe(0);
+      expect(after.suppressed).toBe(0);
+      expect(after.rateLimited).toBe(0);
+    });
+
+    it("41a. resetSession() clears frequency state", () => {
+      const finding = makeFinding();
+      const { pipeline } = createTestPipeline(
+        {},
+        () => makeBlockResult([finding]),
+      );
+
+      pipeline.inspect(injectionInput("s1"));
+      expect(pipeline.getSessionState("s1")).not.toBeNull();
+
+      pipeline.resetSession("s1");
+      expect(pipeline.getSessionState("s1")).toBeNull();
+    });
+
+    it("41b. clear() resets all module state", () => {
       const finding = makeFinding();
       const { pipeline } = createTestPipeline(
         {},
@@ -837,7 +883,345 @@ describe("DrawbridgePipeline", () => {
       pipeline.inspect(injectionInput("s2"));
 
       pipeline.clear();
-      expect(pipeline.frequencyModule.size).toBe(0);
+      expect(pipeline.getSessionState("s1")).toBeNull();
+      expect(pipeline.getSessionState("s2")).toBeNull();
+    });
+  });
+
+  // =========================================================================
+  // output_diff (Phase B tests 21–26)
+  // =========================================================================
+
+  describe("output_diff emission", () => {
+    const injectionFinding = makeFinding({
+      matched: "ignore previous instructions",
+      position: 0,
+    });
+
+    function getOutputDiffEvents(events: TypedAuditEvent[]): OutputDiffEvent[] {
+      return events.filter((e): e is OutputDiffEvent => e.event === "output_diff");
+    }
+
+    it("21. content with redactions → output_diff event emitted with position and fallback", () => {
+      const { pipeline, events } = createTestPipeline(
+        {},
+        () => makeBlockResult([injectionFinding]),
+      );
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(1);
+      expect(diffs[0]!.removals.length).toBeGreaterThan(0);
+      expect(diffs[0]!.replacements.length).toBeGreaterThan(0);
+      // injectionFinding has position: 0 → not a fallback
+      expect(diffs[0]!.removals[0]!.position).toBe(0);
+      expect(diffs[0]!.removals[0]!.fallback).toBe(false);
+      expect(diffs[0]!.replacements[0]!.fallback).toBe(false);
+    });
+
+    it("21b. fallback finding → output_diff removals[].fallback is true", () => {
+      const fallbackFinding = makeFinding({
+        matched: "ignore previous instructions",
+        position: -1, // triggers indexOf fallback
+      });
+      const { pipeline, events } = createTestPipeline(
+        {},
+        () => makeBlockResult([fallbackFinding]),
+      );
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(1);
+      expect(diffs[0]!.removals[0]!.fallback).toBe(true);
+      expect(diffs[0]!.removals[0]!.position).toBeGreaterThanOrEqual(0);
+      expect(diffs[0]!.replacements[0]!.fallback).toBe(true);
+    });
+
+    it("22. content with no redactions → output_diff NOT emitted", () => {
+      const { pipeline, events } = createTestPipeline();
+
+      pipeline.inspect(cleanInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(0);
+    });
+
+    it("23. output_diff removals[].contentHash is empty by default (no bare hashes)", () => {
+      const { pipeline, events } = createTestPipeline(
+        {},
+        () => makeBlockResult([injectionFinding]),
+      );
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(1);
+      const removal = diffs[0]!.removals[0]!;
+      expect(removal.contentHash).toBe("");
+    });
+
+    it("24. output_diff replacements[].lengthBefore and lengthAfter are correct", () => {
+      const { pipeline, events } = createTestPipeline(
+        {},
+        () => makeBlockResult([injectionFinding]),
+      );
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      const replacement = diffs[0]!.replacements[0]!;
+      expect(replacement.lengthBefore).toBe("ignore previous instructions".length);
+      expect(replacement.lengthAfter).toBe("[REDACTED]".length);
+    });
+
+    it("25. at verbosity 'standard' → output_diff not emitted", () => {
+      const events: TypedAuditEvent[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(() => makeBlockResult([injectionFinding])),
+        audit: {
+          verbosity: "standard",
+          onEvent: (e) => events.push(e),
+        },
+      });
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(0);
+    });
+
+    it("26. at verbosity 'high' → output_diff emitted with full data", () => {
+      const events: TypedAuditEvent[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(() => makeBlockResult([injectionFinding])),
+        audit: {
+          verbosity: "high",
+          onEvent: (e) => events.push(e),
+        },
+      });
+
+      pipeline.inspect(injectionInput());
+
+      const diffs = getOutputDiffEvents(events);
+      expect(diffs).toHaveLength(1);
+      expect(diffs[0]!.removals[0]!.contentHash).toBe("");
+      expect(diffs[0]!.replacements[0]!.lengthBefore).toBe("ignore previous instructions".length);
+    });
+  });
+
+  // =========================================================================
+  // Schema validation (Phase C tests 37–41)
+  // =========================================================================
+
+  describe("schema validation", () => {
+    const toolSchema: ToolOutputSchema = {
+      variants: {
+        default: {
+          required: ["result"],
+          fields: { result: "string" },
+          allowExtra: false,
+        },
+      },
+    };
+
+    function mcpInput(content: unknown, serverName = "my-server", toolName = "my-tool"): PipelineInput {
+      return {
+        content,
+        source: "mcp",
+        serverName,
+        toolName,
+        sessionId: "s1",
+        messageId: "msg-1",
+      };
+    }
+
+    function getSchemaEvents(events: TypedAuditEvent[]): SchemaAuditEvent[] {
+      return events.filter((e): e is SchemaAuditEvent =>
+        e.event === "schema_pass" || e.event === "schema_fail",
+      );
+    }
+
+    it("37. MCP input with registered schema → validation runs", () => {
+      const { pipeline, events } = createTestPipeline({
+        schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
+      });
+
+      const result = pipeline.inspect(mcpInput({ result: "ok" }));
+
+      expect(result.schemaResult).not.toBeNull();
+      expect(result.schemaResult!.pass).toBe(true);
+      const schemaEvents = getSchemaEvents(events);
+      expect(schemaEvents).toHaveLength(1);
+      expect(schemaEvents[0]!.event).toBe("schema_pass");
+    });
+
+    it("38. non-MCP input → schema validation skipped", () => {
+      const { pipeline, events } = createTestPipeline({
+        schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
+      });
+
+      const result = pipeline.inspect(cleanInput());
+
+      expect(result.schemaResult).toBeNull();
+      const schemaEvents = getSchemaEvents(events);
+      expect(schemaEvents).toHaveLength(0);
+    });
+
+    it("39. MCP input, no serverName → schema_fail with schema.invalid-key", () => {
+      const { pipeline } = createTestPipeline({
+        schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
+      });
+
+      const result = pipeline.inspect({
+        content: { result: "ok" },
+        source: "mcp",
+        sessionId: "s1",
+        // no serverName
+      });
+
+      expect(result.schemaResult).not.toBeNull();
+      expect(result.schemaResult!.pass).toBe(false);
+      expect(result.schemaResult!.ruleIds).toContain("schema.invalid-key");
+    });
+
+    it("40. schema fail → ruleIds excluded from frequency tracker", () => {
+      const { pipeline } = createTestPipeline({
+        schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
+        frequency: {
+          weights: { "schema.*": 5 },
+        },
+      });
+
+      // Send content missing required "result" field — schema fails
+      const result = pipeline.inspect(mcpInput({ wrong: "field" }));
+
+      expect(result.schemaResult).not.toBeNull();
+      expect(result.schemaResult!.pass).toBe(false);
+      // Schema violations are structural, not injection signals — they should
+      // NOT feed suspicion scoring (tracked via audit/alerting instead)
+      const state = pipeline.getSessionState("s1");
+      expect(state).toBeNull();
+    });
+
+    it("41. schema audit events emitted at correct verbosity", () => {
+      // schema_fail is minimal tier, schema_pass is standard tier
+      const minimalEvents: TypedAuditEvent[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(),
+        schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
+        audit: {
+          verbosity: "minimal",
+          onEvent: (e) => minimalEvents.push(e),
+        },
+      });
+
+      // Valid content → schema_pass should NOT emit at minimal verbosity
+      pipeline.inspect(mcpInput({ result: "ok" }));
+      const passEvents = minimalEvents.filter((e) => e.event === "schema_pass");
+      expect(passEvents).toHaveLength(0);
+
+      // Invalid content → schema_fail SHOULD emit at minimal verbosity
+      pipeline.inspect(mcpInput({ wrong: "field" }, "my-server", "my-tool"));
+      const failEvents = minimalEvents.filter((e) => e.event === "schema_fail");
+      expect(failEvents).toHaveLength(1);
+    });
+  });
+
+  // =========================================================================
+  // Alert Rule 2: trusted tool schema fail (Phase C tests 42–45)
+  // =========================================================================
+
+  describe("alert rule 2: trusted tool schema fail", () => {
+    const toolSchema: ToolOutputSchema = {
+      variants: {
+        default: {
+          required: ["data"],
+          fields: { data: "string" },
+        },
+      },
+    };
+
+    function mcpInput(content: unknown, serverName = "trusted-srv"): PipelineInput {
+      return {
+        content,
+        source: "mcp",
+        serverName,
+        toolName: "my-tool",
+        sessionId: "s1",
+        messageId: "msg-1",
+      };
+    }
+
+    it("42. schema_fail on trusted server → alert with severity=high", () => {
+      const alerts: AlertPayload[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(),
+        trustedServers: ["trusted-srv"],
+        schema: { enabled: true, toolSchemas: { "trusted-srv:my-tool": toolSchema } },
+        audit: { verbosity: "maximum", onEvent: () => {} },
+        alerting: { onAlert: (a) => alerts.push(a) },
+      });
+
+      // Trusted server returns invalid schema
+      pipeline.inspect(mcpInput({ wrong: "field" }));
+
+      const schemaAlerts = alerts.filter((a) => a.ruleId === "trustedToolSchemaFail");
+      expect(schemaAlerts).toHaveLength(1);
+      expect(schemaAlerts[0]!.severity).toBe("high");
+    });
+
+    it("43. schema_fail on untrusted server → no alert", () => {
+      const alerts: AlertPayload[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(),
+        trustedServers: ["other-srv"],
+        schema: { enabled: true, toolSchemas: { "untrusted-srv:my-tool": toolSchema } },
+        audit: { verbosity: "maximum", onEvent: () => {} },
+        alerting: { onAlert: (a) => alerts.push(a) },
+      });
+
+      pipeline.inspect(mcpInput({ wrong: "field" }, "untrusted-srv"));
+
+      const schemaAlerts = alerts.filter((a) => a.ruleId === "trustedToolSchemaFail");
+      expect(schemaAlerts).toHaveLength(0);
+    });
+
+    it("44. rule disabled → no alert", () => {
+      const alerts: AlertPayload[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(),
+        trustedServers: ["trusted-srv"],
+        schema: { enabled: true, toolSchemas: { "trusted-srv:my-tool": toolSchema } },
+        audit: { verbosity: "maximum", onEvent: () => {} },
+        alerting: {
+          onAlert: (a) => alerts.push(a),
+          rules: { trustedToolSchemaFail: { enabled: false } },
+        },
+      });
+
+      pipeline.inspect(mcpInput({ wrong: "field" }));
+
+      const schemaAlerts = alerts.filter((a) => a.ruleId === "trustedToolSchemaFail");
+      expect(schemaAlerts).toHaveLength(0);
+    });
+
+    it("45. alert includes serverName and toolName in summary", () => {
+      const alerts: AlertPayload[] = [];
+      const pipeline = new DrawbridgePipeline({
+        engine: createMockClawMoat(),
+        trustedServers: ["trusted-srv"],
+        schema: { enabled: true, toolSchemas: { "trusted-srv:my-tool": toolSchema } },
+        audit: { verbosity: "maximum", onEvent: () => {} },
+        alerting: { onAlert: (a) => alerts.push(a) },
+      });
+
+      pipeline.inspect(mcpInput({ wrong: "field" }));
+
+      const alert = alerts.find((a) => a.ruleId === "trustedToolSchemaFail")!;
+      expect(alert.summary).toContain("trusted-srv");
+      expect(alert.summary).toContain("my-tool");
     });
   });
 
@@ -846,7 +1230,7 @@ describe("DrawbridgePipeline", () => {
   // =========================================================================
 
   describe("error isolation", () => {
-    it("41. consumer onEvent throws -> pipeline doesn't crash", () => {
+    it("46. consumer onEvent throws -> pipeline doesn't crash", () => {
       const pipeline = new DrawbridgePipeline({
         engine: createMockClawMoat(),
         audit: {
@@ -860,7 +1244,7 @@ describe("DrawbridgePipeline", () => {
       expect(() => pipeline.inspect(cleanInput())).not.toThrow();
     });
 
-    it("42. all stages complete even if audit throws mid-flow", () => {
+    it("47. all stages complete even if audit throws mid-flow", () => {
       let callCount = 0;
       const pipeline = new DrawbridgePipeline({
         engine: createMockClawMoat(),

@@ -23,8 +23,10 @@ import type {
   TypedAuditEvent,
   FrequencyAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
 } from "../types/audit.js";
 
+/** Evaluates audit events against configurable rules and fires alerts when patterns are detected */
 export class AlertManager {
   private readonly config: AlertManagerConfig;
 
@@ -65,6 +67,11 @@ export class AlertManager {
           ...DEFAULT_ALERT_RULES.frequencyEscalation,
           ...config?.rules?.frequencyEscalation,
           tier3Enabled: true, // ALWAYS true — cannot be disabled
+        },
+        trustedToolSchemaFail: {
+          enabled: config?.rules?.trustedToolSchemaFail?.enabled
+            ?? DEFAULT_ALERT_RULES.trustedToolSchemaFail?.enabled
+            ?? true,
         },
       },
       rateLimit: {
@@ -119,7 +126,11 @@ export class AlertManager {
         alert = this.evaluateScanBlockAfterSyntacticPass(event);
         break;
 
-      // write_failed not yet a Drawbridge audit event — writeFailSpike deferred to v1.0
+      case "schema_fail":
+        alert = this.evaluateTrustedToolSchemaFail(event);
+        break;
+
+      // write_failed not yet a Drawbridge audit event — writeFailSpike deferred
     }
 
     // 3. Apply dedup and rate limiting
@@ -277,6 +288,27 @@ export class AlertManager {
     });
   }
 
+  /** Rule 2: Trusted tool schema fail */
+  private evaluateTrustedToolSchemaFail(
+    event: TypedAuditEvent,
+  ): AlertPayload | null {
+    const rule = this.config.rules.trustedToolSchemaFail;
+    if (!rule?.enabled) return null;
+
+    const schemaEvent = event as SchemaAuditEvent;
+    if (schemaEvent.trusted !== true) return null;
+
+    return this.buildAlert({
+      ruleId: "trustedToolSchemaFail",
+      severity: "high",
+      sessionId: event.sessionId,
+      agentId: event.agentId,
+      summary: `Trusted tool ${schemaEvent.serverName}:${schemaEvent.toolName} produced structurally invalid output`,
+      triggeringEvents: [event],
+      ruleConfig: { enabled: rule.enabled },
+    });
+  }
+
   // ---------------------------------------------------------------------------
   // Indexing
   // ---------------------------------------------------------------------------
@@ -328,7 +360,13 @@ export class AlertManager {
   // ---------------------------------------------------------------------------
 
   private isDuplicate(alert: AlertPayload): boolean {
-    const key = `${alert.ruleId}|${alert.sessionId}`;
+    // Include tool identity for schema alerts so different tools' failures
+    // aren't collapsed within the same session.
+    let key = `${alert.ruleId}|${alert.sessionId}`;
+    if (alert.ruleId === "trustedToolSchemaFail") {
+      const trigger = alert.details.triggeringEvents[0] as SchemaAuditEvent | undefined;
+      key += `|${trigger?.serverName ?? ""}:${trigger?.toolName ?? ""}`;
+    }
     const lastTime = this.dedupMap.get(key);
     const windowMs = this.config.suppressionWindowMinutes * 60_000;
     const now = Date.now();

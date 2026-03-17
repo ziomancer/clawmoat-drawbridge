@@ -1,4 +1,4 @@
-// === Shared primitives (canonical source — also re-exported by individual modules) ===
+/** Shared primitives (canonical source — also re-exported by individual modules) */
 export type { Severity, AuditVerbosity, ContentSource } from "./types/common.js";
 export { SEVERITY_RANK, isSeverity } from "./types/common.js";
 
@@ -13,7 +13,7 @@ export { sanitizeContent } from "./sanitize/index.js";
 
 // === v0.3 implemented ===
 export { ProfileResolver } from "./profiles/index.js";
-export { PreFilter } from "./validation/index.js";
+export { PreFilter, SchemaValidator } from "./validation/index.js";
 
 // === v0.4 implemented ===
 export { AuditEmitter, sha256 } from "./audit/index.js";
@@ -25,7 +25,7 @@ export { AlertManager } from "./alerting/index.js";
 export { DrawbridgePipeline } from "./pipeline/index.js";
 export { safeStringify } from "./lib/safe-stringify.js";
 
-// === Module-specific types ===
+/** Scanner and sanitize types */
 export type {
   // Scanner (v0.1)
   ClawMoatFinding,
@@ -37,10 +37,12 @@ export type {
   // Sanitize (v0.3)
   SanitizeConfig,
   SanitizeResult,
+  RedactionDetail,
 } from "./types/scanner.js";
 
 export { DEFAULT_SANITIZE_CONFIG } from "./types/scanner.js";
 
+/** Frequency tracker types */
 export type {
   // Frequency (v0.2)
   EscalationTier,
@@ -53,6 +55,7 @@ export type {
 
 export { DEFAULT_FREQUENCY_CONFIG, DEFAULT_MEMORY_CONFIG } from "./types/frequency.js";
 
+/** Profile types */
 export type {
   // Profiles (v0.3)
   BuiltInProfileId,
@@ -66,6 +69,7 @@ export type {
 
 export { BUILTIN_PROFILES } from "./profiles/builtin.js";
 
+/** Validation and schema types */
 export type {
   // Validation (v0.3)
   SyntacticFilterConfig,
@@ -73,11 +77,16 @@ export type {
   SchemaValidationResult,
   PreFilterResult,
   TwoPassConfig,
+  // Schema (v1.1)
+  ToolOutputSchema,
+  FieldSchema,
+  SchemaValidationConfig,
 } from "./types/validation.js";
 
-export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES } from "./types/validation.js";
+export { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_HARD_BLOCK_RULES, DEFAULT_SCHEMA_CONFIG } from "./types/validation.js";
 export { SYNTACTIC_RULES, SYNTACTIC_RULE_TAXONOMY } from "./validation/index.js";
 
+/** Audit event types */
 export type {
   // Audit (v0.4)
   AuditEventType,
@@ -86,6 +95,7 @@ export type {
   TypedAuditEvent,
   ScanAuditEvent,
   SyntacticAuditEvent,
+  SchemaAuditEvent,
   FrequencyAuditEvent,
   SanitizeAuditEvent,
   ProfileAuditEvent,
@@ -102,6 +112,7 @@ export {
   DEFAULT_AUDIT_CONFIG,
 } from "./types/audit.js";
 
+/** Alerting types */
 export type {
   // Alerting (v0.5)
   AlertSeverity,
@@ -117,6 +128,7 @@ export {
   DEFAULT_ALERT_CONFIG,
 } from "./types/alerting.js";
 
+/** Pipeline types */
 export type {
   // Pipeline (v0.2+)
   TrustTier,

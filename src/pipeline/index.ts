@@ -22,7 +22,7 @@
 
 import { DrawbridgeScanner } from "../scanner/index.js";
 import { FrequencyTracker } from "../frequency/index.js";
-import { PreFilter } from "../validation/index.js";
+import { PreFilter, SchemaValidator } from "../validation/index.js";
 import { ProfileResolver } from "../profiles/index.js";
 import { AuditEmitter } from "../audit/index.js";
 import { AlertManager } from "../alerting/index.js";
@@ -36,16 +36,23 @@ import type {
 } from "../types/pipeline.js";
 import type { TypedAuditEvent } from "../types/audit.js";
 import type { AlertPayload } from "../types/alerting.js";
-import type { SyntacticFilterResult } from "../types/validation.js";
+import type { SyntacticFilterResult, SchemaValidationResult } from "../types/validation.js";
 import type { DrawbridgeScanResult, SanitizeResult } from "../types/scanner.js";
-import type { FrequencyUpdateResult, EscalationTier } from "../types/frequency.js";
+import type { FrequencyUpdateResult, EscalationTier, SessionSuspicionState } from "../types/frequency.js";
 import type { ResolvedProfile } from "../types/profiles.js";
 import { DEFAULT_HARD_BLOCK_RULES } from "../types/validation.js";
 
+/** Parse a JSON string, returning the original string on failure. */
+function parseOrFallback(content: string): unknown {
+  try { return JSON.parse(content); } catch { return content; }
+}
+
+/** Full pipeline orchestration: routes content through validation, scanning, frequency tracking, and audit */
 export class DrawbridgePipeline {
   private readonly scanner: DrawbridgeScanner;
   private readonly tracker: FrequencyTracker;
   private readonly preFilter: PreFilter;
+  private readonly schemaValidator: SchemaValidator | null;
   private readonly profile: ProfileResolver;
   private readonly auditor: AuditEmitter;
   private readonly alerter: AlertManager;
@@ -56,6 +63,8 @@ export class DrawbridgePipeline {
     redactAll: boolean;
     placeholder: string;
     includeRuleId: boolean;
+    hashRedactions: boolean;
+    hmacKey: string | undefined;
   };
   private readonly syntacticEnabled: boolean;
 
@@ -87,6 +96,11 @@ export class DrawbridgePipeline {
     const syntacticConfig = this.profile.applySyntacticConfig(cfg.syntactic);
     this.preFilter = new PreFilter(syntacticConfig);
 
+    // 2b. Schema validator (only when explicitly enabled)
+    this.schemaValidator = cfg.schema?.enabled
+      ? new SchemaValidator(cfg.schema)
+      : null;
+
     // 3. Build frequency tracker config (profile applies weight/threshold overrides)
     const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
     this.tracker = new FrequencyTracker(frequencyConfig);
@@ -104,6 +118,8 @@ export class DrawbridgePipeline {
       redactAll: cfg.sanitize?.redactAll ?? false,
       placeholder: cfg.sanitize?.placeholder ?? "[REDACTED]",
       includeRuleId: cfg.sanitize?.includeRuleId ?? false,
+      hashRedactions: cfg.sanitize?.hashRedactions ?? false,
+      hmacKey: cfg.sanitize?.hmacKey,
     };
 
     // 6. Two-pass config
@@ -177,7 +193,7 @@ export class DrawbridgePipeline {
     // --- Trust check ---
     const trustTier = this.resolveTrust(input);
     if (trustTier === "trusted") {
-      return this.trustedFastPath(content, events, alerts, auditParams);
+      return this.trustedFastPath(content, input, events, alerts, auditParams);
     }
 
     // --- Check for terminated session ---
@@ -241,7 +257,7 @@ export class DrawbridgePipeline {
     }
 
     // --- Frequency update: pre-filter findings ---
-    // Intentional: both stages contribute to suspicion -- defense in depth
+    // Syntactic pre-filter findings contribute to suspicion — defense in depth
     let frequencyResult: FrequencyUpdateResult | null = null;
 
     if (preFilterRuleIds.length > 0) {
@@ -256,6 +272,7 @@ export class DrawbridgePipeline {
           safe: false,
           trusted: false,
           preFilterResult,
+          schemaResult: null,
           scanResult: null,
           sanitizeResult: null,
           escalationTier: "tier3",
@@ -287,6 +304,15 @@ export class DrawbridgePipeline {
         }
       }
     }
+
+    // --- Stage 1b: Schema validation (MCP sources only) ---
+    // Skipped for hard-blocked content — no point validating schema on input
+    // that's already rejected. Schema violations are structural (type/format
+    // issues), not injection signals — tracked via audit events but excluded
+    // from frequency/suspicion scoring.
+    const schemaResult = skipScanner
+      ? null
+      : this.runSchemaValidation(content, input, events, alerts, auditParams);
 
     // --- Stage 2: Scanner (ClawMoat) ---
     let scanResult: DrawbridgeScanResult | null = null;
@@ -362,6 +388,8 @@ export class DrawbridgePipeline {
         placeholder: this._sanitize.placeholder,
         includeRuleId: this._sanitize.includeRuleId,
         redactAll: this._sanitize.redactAll,
+        hashRedactions: this._sanitize.hashRedactions,
+        hmacKey: this._sanitize.hmacKey,
       });
       sanitizedContent = sanitizeResult.sanitized;
 
@@ -378,8 +406,30 @@ export class DrawbridgePipeline {
           alerts,
         );
 
-        // Clarification #7: skip output_diff in v1.0
-        // TODO v1.1: output_diff with per-redaction position and hash data
+        // Emit output_diff at high verbosity with per-redaction data
+        if (sanitizeResult.redactions.length > 0) {
+          this.routeEvent(
+            this.auditor.emitOutputDiff({
+              ...auditParams,
+              removals: sanitizeResult.redactions
+                .map(r => ({
+                  ruleId: r.ruleId,
+                  position: r.position,
+                  matchedLength: r.matchedLength,
+                  contentHash: r.contentHash,
+                  fallback: r.fallback,
+                })),
+              replacements: sanitizeResult.redactions.map(r => ({
+                ruleId: r.ruleId,
+                lengthBefore: r.matchedLength,
+                lengthAfter: r.replacement.length,
+                fallback: r.fallback,
+              })),
+            }),
+            events,
+            alerts,
+          );
+        }
       }
     }
 
@@ -417,6 +467,7 @@ export class DrawbridgePipeline {
       safe,
       trusted: false,
       preFilterResult,
+      schemaResult,
       scanResult,
       sanitizeResult,
       escalationTier,
@@ -433,40 +484,32 @@ export class DrawbridgePipeline {
   // Public API: module access
   // ---------------------------------------------------------------------------
 
-  /**
-   * Access the underlying scanner.
-   *
-   * **Caveat (v1.0):** Returns a mutable reference to the live instance.
-   * Modifications affect pipeline behavior. Treat as read-only unless you
-   * understand the implications. v1.1 may freeze or proxy these accessors.
-   */
-  get scannerModule(): DrawbridgeScanner {
-    return this.scanner;
-  }
-
-  /** Access the underlying frequency tracker. See scannerModule caveat re: mutability. */
-  get frequencyModule(): FrequencyTracker {
-    return this.tracker;
-  }
-
-  /** Access the underlying pre-filter. See scannerModule caveat re: mutability. */
-  get preFilterModule(): PreFilter {
-    return this.preFilter;
-  }
-
-  /** Access the resolved profile */
+  /** Access the resolved profile (frozen, safe to expose) */
   get resolvedProfile(): ResolvedProfile {
     return this.profile.profile;
   }
 
-  /** Access the audit emitter. See scannerModule caveat re: mutability. */
-  get auditModule(): AuditEmitter {
-    return this.auditor;
+  /** Get a session's current frequency state (returns snapshot, not reference) */
+  getSessionState(sessionId: string): SessionSuspicionState | null {
+    return this.tracker.getState(sessionId);
   }
 
-  /** Access the alert manager. See scannerModule caveat re: mutability. */
-  get alertModule(): AlertManager {
-    return this.alerter;
+  /** Get audit stats (emitted, dropped, errors) */
+  getAuditStats(): { emitted: number; dropped: number; errors: number } {
+    return {
+      emitted: this.auditor.emitted,
+      dropped: this.auditor.dropped,
+      errors: this.auditor.errors,
+    };
+  }
+
+  /** Get alert stats */
+  getAlertStats(): { alerts: number; suppressed: number; rateLimited: number } {
+    return {
+      alerts: this.alerter.alerts,
+      suppressed: this.alerter.suppressed,
+      rateLimited: this.alerter.rateLimited,
+    };
   }
 
   /** Reset a session's frequency state */
@@ -499,13 +542,16 @@ export class DrawbridgePipeline {
       : "untrusted";
   }
 
-  /** Fast path for trusted MCP servers */
+  /** Fast path for trusted MCP servers — still runs schema validation */
   private trustedFastPath(
     content: string,
+    input: PipelineInput,
     events: TypedAuditEvent[],
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
   ): PipelineResult {
+    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
+
     this.routeEvent(
       this.auditor.emitScan({
         ...(auditParams as Parameters<AuditEmitter["emitScan"]>[0]),
@@ -522,6 +568,7 @@ export class DrawbridgePipeline {
       safe: true,
       trusted: true,
       preFilterResult: null,
+      schemaResult,
       scanResult: null,
       sanitizeResult: null,
       escalationTier: "none",
@@ -559,6 +606,7 @@ export class DrawbridgePipeline {
       safe: false,
       trusted: false,
       preFilterResult: null,
+      schemaResult: null,
       scanResult: null,
       sanitizeResult: null,
       escalationTier: "tier3",
@@ -656,6 +704,79 @@ export class DrawbridgePipeline {
       events,
       alerts,
     );
+  }
+
+  /**
+   * Run schema validation if applicable (MCP source with serverName + toolName).
+   * Shared between the main inspect path and the trusted fast path.
+   *
+   * When `input.content` is a string and `JSON.parse` fails, the raw string is
+   * passed to the validator. `validateAgainstSchema` will reject it (typeof !== "object"),
+   * and `validateDefault` strict mode will reject it (jsType === "string"). This is a
+   * safe fallback — malformed/binary data cannot silently pass schema checks.
+   */
+  private runSchemaValidation(
+    content: string,
+    input: PipelineInput,
+    events: TypedAuditEvent[],
+    alerts: AlertPayload[],
+    auditParams: Record<string, unknown>,
+  ): SchemaValidationResult | null {
+    if (!this.schemaValidator || input.source !== "mcp") {
+      return null;
+    }
+
+    // MCP source but missing identifiers — emit a misconfiguration signal
+    // and return a concrete failure so PipelineResult.schemaResult reflects it.
+    if (!input.serverName || !input.toolName) {
+      const missingResult: SchemaValidationResult = {
+        pass: false,
+        violations: ["MCP source is missing serverName or toolName — schema validation skipped"],
+        ruleIds: ["schema.invalid-key"],
+      };
+      this.routeEvent(
+        this.auditor.emitSchema({
+          ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
+          pass: false,
+          violations: missingResult.violations,
+          ruleIds: missingResult.ruleIds,
+          serverName: input.serverName ?? "<unknown>",
+          toolName: input.toolName ?? "<unknown>",
+          trusted: false, // misconfiguration, not a content violation — never fire trustedToolSchemaFail
+        }),
+        events,
+        alerts,
+      );
+      return missingResult;
+    }
+
+    // Use the original content object when available (non-string input.content)
+    // to validate the canonical in-memory form — no round-trip serialization
+    // artifacts. For string inputs, parse to recover the object; if parsing
+    // fails the raw string is passed through and the validator rejects it.
+    const parsedContent = typeof input.content !== "string" ? input.content : undefined;
+    const contentForSchema = parsedContent !== undefined
+      ? parsedContent
+      : parseOrFallback(content);
+
+    const schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
+    const trusted = this._trustedServers.includes(input.serverName);
+
+    this.routeEvent(
+      this.auditor.emitSchema({
+        ...(auditParams as Parameters<AuditEmitter["emitSchema"]>[0]),
+        pass: schemaResult.pass,
+        violations: schemaResult.violations,
+        ruleIds: schemaResult.ruleIds,
+        serverName: input.serverName,
+        toolName: input.toolName,
+        trusted,
+      }),
+      events,
+      alerts,
+    );
+
+    return schemaResult;
   }
 
   private buildResult(fields: PipelineResult): PipelineResult {

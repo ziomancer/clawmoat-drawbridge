@@ -283,4 +283,39 @@ describe("DrawbridgeScanner", () => {
     const scanner = new DrawbridgeScanner(undefined, mock);
     expect(scanner.engine).toBe(mock);
   });
+
+  // 19. Fix #8: onFinding callback mutation doesn't corrupt scanner result
+  it("onFinding callback mutating source.position does not affect scanner result", () => {
+    const finding = makeFinding({ position: 5, matched: "test" });
+    const mock = createMockClawMoat(() => makeResult({ inbound: [finding] }));
+
+    const scanner = new DrawbridgeScanner(
+      {
+        onFinding: (f: DrawbridgeFinding) => {
+          f.source.position = 999;
+          f.source.matched = "CORRUPTED";
+        },
+      },
+      mock,
+    );
+
+    const result = scanner.scan("test");
+    // The finding stored in results should be unaffected by callback mutation
+    expect(result.findings[0]!.source.position).toBe(5);
+    expect(result.findings[0]!.source.matched).toBe("test");
+  });
+
+  // 20. Fix #8: scanner findings are independent copies (input mutation safe)
+  it("scanner result findings are decoupled from input findings", () => {
+    const f1 = makeFinding({ position: 0, matched: "aaa", type: "t1", subtype: "s1" });
+    const mock = createMockClawMoat(() => makeResult({ inbound: [f1] }));
+    const scanner = new DrawbridgeScanner(undefined, mock);
+    const result = scanner.scan("test");
+
+    // Mutating the original input finding must not affect the scan result
+    f1.position = 999;
+    f1.matched = "CORRUPTED";
+    expect(result.findings[0]!.source.position).toBe(0);
+    expect(result.findings[0]!.source.matched).toBe("aaa");
+  });
 });

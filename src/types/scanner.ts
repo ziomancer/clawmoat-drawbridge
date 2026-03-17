@@ -104,12 +104,48 @@ export interface SanitizeConfig {
    * Default: false
    */
   includeRuleId: boolean;
+
+  /**
+   * Whether to include content hashes in redaction details. Default: false.
+   * When true, an HMAC-SHA256 is computed for each redacted substring using
+   * `hmacKey`. If `hmacKey` is absent, hashes are omitted (empty string)
+   * rather than falling back to bare SHA-256.
+   */
+  hashRedactions?: boolean;
+
+  /**
+   * HMAC key for redaction hashes. Optional — when `hashRedactions` is true
+   * but `hmacKey` is not provided, redaction hashes are empty strings.
+   * No bare SHA-256 is ever emitted.
+   *
+   * The key is retained in memory as a plain string for the lifetime of the
+   * DrawbridgePipeline instance. Callers using rotation-eligible keys should
+   * construct a new pipeline when the key rotates.
+   */
+  hmacKey?: string;
 }
 
+/** Default sanitize/redaction configuration */
 export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
   placeholder: "[REDACTED]",
   includeRuleId: false,
 };
+
+/** Per-redaction detail for audit trail */
+export interface RedactionDetail {
+  /** Rule ID that caused this redaction */
+  ruleId: string;
+  /** Start position in original content */
+  position: number;
+  /** Length of content that was replaced */
+  matchedLength: number;
+  /** HMAC-SHA256 of the replaced content (if hashRedactions + hmacKey configured), otherwise empty string */
+  contentHash: string;
+  /** The placeholder that replaced it */
+  replacement: string;
+  /** Whether this used the multi-occurrence fallback */
+  fallback: boolean;
+}
 
 /** Result of content sanitization */
 export interface SanitizeResult {
@@ -127,4 +163,10 @@ export interface SanitizeResult {
 
   /** Original content length */
   originalLength: number;
+
+  /** Number of redactions that used multi-occurrence fallback (no reliable position data) */
+  fallbackRedactions: number;
+
+  /** Per-redaction detail for audit trail */
+  redactions: RedactionDetail[];
 }
