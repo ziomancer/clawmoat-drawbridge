@@ -404,8 +404,13 @@ describe("DrawbridgePipeline", () => {
       );
 
       // Drive the session to termination through inspect calls
+      const MAX_ITERATIONS = 200;
+      let iterations = 0;
       while (!pipeline.inspect(injectionInput("s1")).terminated) {
-        // keep going
+        iterations++;
+        if (iterations >= MAX_ITERATIONS) {
+          throw new Error(`Session did not terminate after ${MAX_ITERATIONS} inspect calls`);
+        }
       }
 
       scanSpy.mockClear();

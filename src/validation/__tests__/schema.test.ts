@@ -94,7 +94,7 @@ describe("SchemaValidator", () => {
     const result = v.validate({ name: "Alice" }, "srv", "tool");
     expect(result.pass).toBe(false);
     expect(result.ruleIds).toContain("schema.missing-field");
-    expect(result.violations.some((v) => v.includes('"age"'))).toBe(true);
+    expect(result.violations.some((msg) => msg.includes('"age"'))).toBe(true);
   });
 
   // 32. Field type mismatch → fail with schema.type-mismatch
@@ -130,7 +130,7 @@ describe("SchemaValidator", () => {
     const result = v.validate({ id: 1, secret: "oops" }, "srv", "tool");
     expect(result.pass).toBe(false);
     expect(result.ruleIds).toContain("schema.extra-field");
-    expect(result.violations.some((v) => v.includes('"secret"'))).toBe(true);
+    expect(result.violations.some((msg) => msg.includes('"secret"'))).toBe(true);
   });
 
   // 34. Extra field, allowExtra=true → pass
