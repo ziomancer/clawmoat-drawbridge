@@ -25,11 +25,25 @@ export interface PipelineInput {
   content: string | unknown;
   /** Where the content came from */
   source: ContentSource;
-  /** For MCP sources: which server produced this result */
+  /**
+   * For MCP sources: which server produced this result.
+   *
+   * @security CALLER MUST verify server identity at the transport layer.
+   * If sourced from message content, attackers can spoof trusted servers
+   * to bypass all inspection.
+   * Configure `validateServerName` on DrawbridgePipelineConfig for runtime validation.
+   */
   serverName?: string;
   /** For MCP sources: which tool was called */
   toolName?: string;
-  /** Session identifier for frequency tracking */
+  /**
+   * Session identifier for frequency tracking.
+   *
+   * @security CALLER MUST derive this from authenticated transport state
+   * (e.g., server-signed session token). If sourced from client input,
+   * attackers can poison other sessions' frequency scores.
+   * Configure `validateSessionId` on DrawbridgePipelineConfig for runtime validation.
+   */
   sessionId: string;
   /** Turn identifier for audit correlation */
   messageId?: string;
@@ -121,4 +135,29 @@ export interface DrawbridgePipelineConfig {
 
   /** MCP servers that bypass full inspection. Default: [] */
   trustedServers?: string[];
+
+  /**
+   * Optional callback to validate session IDs before they're used for
+   * frequency tracking. If provided, called with the raw sessionId from
+   * PipelineInput. Return true to accept, false to reject.
+   *
+   * @security sessionId is caller-provided and unvalidated by default.
+   * Without this callback, an attacker who knows a victim's session ID
+   * can poison their frequency score. Derive sessionId from your
+   * authenticated transport layer (e.g., server-signed session token),
+   * not from client-provided input.
+   */
+  validateSessionId?: (sessionId: string) => boolean;
+
+  /**
+   * Optional callback to validate server names before trust resolution.
+   * If provided, called with the serverName from PipelineInput.
+   * Return true to accept the claimed identity, false to reject.
+   *
+   * @security serverName is caller-provided and unvalidated by default.
+   * Without this callback, an attacker can spoof a trusted server name
+   * to bypass all inspection. Verify server identity at the transport
+   * layer (e.g., mTLS, signed tokens) before trusting serverName.
+   */
+  validateServerName?: (serverName: string) => boolean;
 }

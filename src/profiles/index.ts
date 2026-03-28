@@ -35,6 +35,7 @@ export class ProfileResolver {
     // Freeze — profile must not change after construction
     Object.freeze(this.resolved);
     Object.freeze(this.resolved.syntacticEmphasis);
+    Object.freeze(this.resolved.frequencyWeightOverrides);
     Object.freeze(this.resolved.frequencyThresholdOverrides);
   }
 
