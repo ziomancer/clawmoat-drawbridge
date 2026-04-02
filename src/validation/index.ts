@@ -46,7 +46,7 @@ export const SYNTACTIC_RULES = Object.freeze({
 } as const);
 
 /** All valid syntactic rule IDs — used by profiles for validation */
-export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = new Set([
+export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = Object.freeze(new Set([
   "drawbridge.syntactic.injection.ignore-previous",
   "drawbridge.syntactic.injection.ignore-all",
   "drawbridge.syntactic.injection.disregard",
@@ -64,7 +64,7 @@ export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = new Set([
   "drawbridge.syntactic.encoding.homoglyph-substitution",
   "drawbridge.syntactic.encoding.invisible-chars",
   "drawbridge.syntactic.encoding.rtl-override",
-]);
+]));
 
 // ---------------------------------------------------------------------------
 // JSON depth measurement

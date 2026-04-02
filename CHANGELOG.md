@@ -15,7 +15,7 @@ Fixes findings #1-4 from the adversarial security review (unicode/encoding bypas
 - Null byte stripping (U+0000)
 - Extended homoglyph map: Greek letters (alpha, epsilon, omicron, rho, kappa, iota, nu), Latin Extended (dotless i)
 - RTL override character detection (U+202A-U+202E, U+2066-U+2069)
-- Two new encoding rules: `invisible-chars`, `rtl-override` (taxonomy now 18 rules)
+- Two new encoding rules: `invisible-chars`, `rtl-override` (taxonomy now 17 rules)
 - Escalation logic: invisible chars + injection pattern match promotes encoding flag to fail, even when injection rule is profile-suppressed
 - 29 unit tests for normalization, 12 bypass integration tests
 
