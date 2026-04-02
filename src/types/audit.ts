@@ -49,7 +49,7 @@ export type AuditEventType =
 // Verbosity gating
 // ---------------------------------------------------------------------------
 
-export const VERBOSITY_RANK: Record<AuditVerbosity, number> = {
+const VERBOSITY_RANK: Record<AuditVerbosity, number> = {
   minimal: 1,
   standard: 2,
   high: 3,
@@ -279,8 +279,8 @@ export interface AuditEmitterConfig {
 }
 
 /** Default audit emitter configuration */
-export const DEFAULT_AUDIT_CONFIG: AuditEmitterConfig = Object.freeze({
+export const DEFAULT_AUDIT_CONFIG: AuditEmitterConfig = {
   enabled: true,
   verbosity: "standard",
   alertingEnabled: false,
-});
+};

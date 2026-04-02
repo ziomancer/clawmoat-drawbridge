@@ -68,10 +68,6 @@ export class DrawbridgePipeline {
   };
   private readonly syntacticEnabled: boolean;
 
-  /** Validation hooks (Findings #8, #9) */
-  private readonly _validateSessionId?: (sessionId: string) => boolean;
-  private readonly _validateServerName?: (serverName: string) => boolean;
-
   /** Consumer's onEvent callback (forwarded per-event by pipeline) */
   private readonly _consumerOnEvent?: (event: TypedAuditEvent) => void;
   private readonly _consumerOnError?: (error: unknown, event: TypedAuditEvent) => void;
@@ -105,15 +101,10 @@ export class DrawbridgePipeline {
       ? new SchemaValidator(cfg.schema)
       : null;
 
-    // 3. Build frequency tracker (injected or profile-derived)
-    if (cfg.tracker) {
-      this.tracker = cfg.tracker;
-      this.tier1Threshold = cfg.tracker.thresholds.tier1;
-    } else {
-      const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
-      this.tracker = new FrequencyTracker(frequencyConfig);
-      this.tier1Threshold = frequencyConfig.thresholds.tier1;
-    }
+    // 3. Build frequency tracker config (profile applies weight/threshold overrides)
+    const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
+    this.tracker = new FrequencyTracker(frequencyConfig);
+    this.tier1Threshold = frequencyConfig.thresholds.tier1;
 
     // 4. Scanner — pass through engine if provided for testing
     this.scanner = new DrawbridgeScanner(
@@ -134,15 +125,11 @@ export class DrawbridgePipeline {
     // 6. Two-pass config
     this._twoPass = {
       enabled: cfg.twoPass?.enabled ?? false,
-      hardBlockRules: [...(cfg.twoPass?.hardBlockRules ?? DEFAULT_HARD_BLOCK_RULES)],
+      hardBlockRules: cfg.twoPass?.hardBlockRules ?? [...DEFAULT_HARD_BLOCK_RULES],
     };
 
     // 7. Trust config
-    this._trustedServers = [...(cfg.trustedServers ?? [])];
-
-    // 7b. Validation hooks (Findings #8, #9)
-    this._validateSessionId = cfg.validateSessionId;
-    this._validateServerName = cfg.validateServerName;
+    this._trustedServers = cfg.trustedServers ?? [];
 
     // 8. Audit emitter — pipeline is the event router (Option A)
     this._consumerOnEvent = cfg.audit?.onEvent;
@@ -209,17 +196,14 @@ export class DrawbridgePipeline {
       return this.trustedFastPath(content, input, events, alerts, auditParams);
     }
 
-    // --- Session ID validation (Finding #8) ---
-    const sessionValid = !this._validateSessionId || this._validateSessionId(input.sessionId);
-
     // --- Check for terminated session ---
-    const currentState = sessionValid ? this.tracker.getState(input.sessionId) : null;
+    const currentState = this.tracker.getState(input.sessionId);
     if (currentState?.terminated) {
       return this.terminatedPath(content, input, events, alerts, auditParams);
     }
 
     // --- Clarification #4: capture prior state BEFORE any frequency updates ---
-    const priorState = sessionValid ? this.tracker.getState(input.sessionId) : null;
+    const priorState = this.tracker.getState(input.sessionId);
 
     // --- Stage 1: Syntactic pre-filter ---
     let preFilterResult: SyntacticFilterResult | null = null;
@@ -276,7 +260,7 @@ export class DrawbridgePipeline {
     // Syntactic pre-filter findings contribute to suspicion — defense in depth
     let frequencyResult: FrequencyUpdateResult | null = null;
 
-    if (preFilterRuleIds.length > 0 && sessionValid) {
+    if (preFilterRuleIds.length > 0) {
       frequencyResult = this.tracker.update(input.sessionId, preFilterRuleIds);
 
       // Clarification #3: only emit frequency escalation on tier transition
@@ -381,7 +365,7 @@ export class DrawbridgePipeline {
       // --- Frequency update: scanner findings ---
       // Intentional: both stages contribute to suspicion -- defense in depth
       const scannerRuleIds = scanResult.findings.map((f) => f.ruleId);
-      if (scannerRuleIds.length > 0 && sessionValid) {
+      if (scannerRuleIds.length > 0) {
         const scanFreqResult = this.tracker.update(input.sessionId, scannerRuleIds);
         frequencyResult = scanFreqResult;
 
@@ -553,10 +537,6 @@ export class DrawbridgePipeline {
   private resolveTrust(input: PipelineInput): TrustTier {
     if (input.source !== "mcp") return "untrusted";
     if (!input.serverName) return "untrusted";
-    // Reject spoofed server names if validation hook configured (Finding #9)
-    if (this._validateServerName && !this._validateServerName(input.serverName)) {
-      return "untrusted";
-    }
     return this._trustedServers.includes(input.serverName)
       ? "trusted"
       : "untrusted";

@@ -32,22 +32,11 @@ const DISABLED_RESULT: FrequencyUpdateResult = Object.freeze({
   terminated: false,
 });
 
-/** Static "rate-limited" result — returned when new session creation is throttled */
-const RATE_LIMITED_RESULT: FrequencyUpdateResult = Object.freeze({
-  previousScore: 0,
-  currentScore: 0,
-  tier: "none" as const,
-  terminated: false,
-});
-
 export class FrequencyTracker {
   private readonly config: FrequencyTrackerConfig;
   private readonly sessions: Map<string, SessionSuspicionState>;
   private readonly globKeys: ReadonlyArray<{ prefix: string; weight: number }>;
   private readonly exactKeys: ReadonlyMap<string, number>;
-
-  /** Rolling timestamps of new session creations (for rate limiting, Finding #7) */
-  private readonly sessionCreationTimestamps: number[] = [];
 
   constructor(config?: Partial<FrequencyTrackerConfig>) {
     this.config = {
@@ -72,23 +61,6 @@ export class FrequencyTracker {
     if (!Number.isFinite(this.config.halfLifeMs) || this.config.halfLifeMs <= 0) {
       throw new Error(
         `FrequencyTracker: halfLifeMs must be a positive finite number. Got ${this.config.halfLifeMs}`,
-      );
-    }
-
-    // Validate rolling-window knobs
-    if (!Number.isFinite(this.config.rollingWindowMs) || this.config.rollingWindowMs <= 0) {
-      throw new Error(
-        `FrequencyTracker: rollingWindowMs must be a positive finite number. Got ${this.config.rollingWindowMs}`,
-      );
-    }
-    if (!Number.isFinite(this.config.rollingThreshold) || this.config.rollingThreshold <= 0 || !Number.isInteger(this.config.rollingThreshold)) {
-      throw new Error(
-        `FrequencyTracker: rollingThreshold must be a positive integer. Got ${this.config.rollingThreshold}`,
-      );
-    }
-    if (!Number.isFinite(this.config.memory.maxNewSessionsPerMinute) || this.config.memory.maxNewSessionsPerMinute <= 0 || !Number.isInteger(this.config.memory.maxNewSessionsPerMinute)) {
-      throw new Error(
-        `FrequencyTracker: maxNewSessionsPerMinute must be a positive integer. Got ${this.config.memory.maxNewSessionsPerMinute}`,
       );
     }
 
@@ -134,22 +106,9 @@ export class FrequencyTracker {
     const isNew = !state;
 
     if (!state) {
-      // Rate-limit new session creation when at capacity (Finding #7).
-      // Only enforced when sessions are at max — prevents flood-eviction attacks
-      // while allowing normal operation well under capacity.
-      if (
-        this.sessions.size >= this.config.memory.maxSessions &&
-        this.isSessionCreationRateLimited()
-      ) {
-        return RATE_LIMITED_RESULT;
-      }
-      state = { lastScore: 0, lastUpdateMs: Date.now(), rollingFindings: [] };
+      state = { lastScore: 0, lastUpdateMs: Date.now() };
       this.sessions.set(sessionId, state);
-      this.sessionCreationTimestamps.push(Date.now());
     }
-
-    // Backward compatibility: initialize rollingFindings if missing
-    state.rollingFindings ??= [];
 
     // 3. Enforce max-sessions cap (only after creating a new entry)
     if (isNew && this.sessions.size > this.config.memory.maxSessions) {
@@ -181,20 +140,10 @@ export class FrequencyTracker {
     const previousScore = decayed;
     const currentScore = decayed + totalWeight;
 
-    // 8. Record rolling window findings (for low-and-slow detection, Finding #6)
-    if (ruleIds.length > 0) {
-      state.rollingFindings!.push(now);
-    }
-    const windowStart = now - this.config.rollingWindowMs;
-    state.rollingFindings = state.rollingFindings!.filter(t => t >= windowStart);
+    // 8. Determine tier
+    const tier = this.evaluateTier(currentScore);
 
-    // 9. Determine tier — rolling counter can promote to at least tier1
-    let tier = this.evaluateTier(currentScore);
-    if (tier === "none" && state.rollingFindings.length >= this.config.rollingThreshold) {
-      tier = "tier1";
-    }
-
-    // 10. Update state
+    // 9. Update state
     state.lastScore = currentScore;
     state.lastUpdateMs = now;
     if (tier === "tier3") {
@@ -209,19 +158,10 @@ export class FrequencyTracker {
     };
   }
 
-  /** Returns the tracker's threshold configuration (defensive copy). */
-  get thresholds(): { tier1: number; tier2: number; tier3: number } {
-    return { ...this.config.thresholds };
-  }
-
   /** Returns a snapshot of the session's suspicion state, or null if unknown. */
   getState(sessionId: string): SessionSuspicionState | null {
     const state = this.sessions.get(sessionId);
-    if (!state) return null;
-    return {
-      ...state,
-      rollingFindings: state.rollingFindings ? [...state.rollingFindings] : undefined,
-    };
+    return state ? { ...state } : null;
   }
 
   reset(sessionId: string): void {
@@ -281,19 +221,10 @@ export class FrequencyTracker {
   }
 
   /**
-   * Max-sessions cap — evict terminated sessions first, then the oldest
-   * session (by lastUpdateMs) that is NOT the session we just created.
+   * Max-sessions cap — evict the oldest session (by lastUpdateMs)
+   * that is NOT the session we just created.
    */
   private evictOldest(excludeSessionId: string): void {
-    // Prefer evicting a terminated session
-    for (const [id, state] of this.sessions) {
-      if (id !== excludeSessionId && state.terminated) {
-        this.sessions.delete(id);
-        return;
-      }
-    }
-
-    // Fall back to oldest by lastUpdateMs
     let oldestId: string | null = null;
     let oldestTs = Infinity;
 
@@ -307,21 +238,5 @@ export class FrequencyTracker {
     if (oldestId) {
       this.sessions.delete(oldestId);
     }
-  }
-
-  /** Check if new session creation exceeds the per-minute rate limit */
-  private isSessionCreationRateLimited(): boolean {
-    const now = Date.now();
-    const oneMinuteAgo = now - 60_000;
-
-    // Evict old timestamps
-    while (
-      this.sessionCreationTimestamps.length > 0 &&
-      this.sessionCreationTimestamps[0]! < oneMinuteAgo
-    ) {
-      this.sessionCreationTimestamps.shift();
-    }
-
-    return this.sessionCreationTimestamps.length >= this.config.memory.maxNewSessionsPerMinute;
   }
 }
