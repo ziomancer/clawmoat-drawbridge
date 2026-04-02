@@ -18,7 +18,7 @@ Every module is standalone. Use them individually or wire them together.
 ## Install
 
 ```bash
-npm install @ziomancer/clawmoat-drawbridge clawmoat
+npm i @vigil-harbor/clawmoat-drawbridge
 ```
 
 ## Modules
