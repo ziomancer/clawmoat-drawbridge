@@ -192,10 +192,19 @@ export class FrequencyTracker {
     };
   }
 
+  /** Returns the tracker's threshold configuration (defensive copy). */
+  get thresholds(): { tier1: number; tier2: number; tier3: number } {
+    return { ...this.config.thresholds };
+  }
+
   /** Returns a snapshot of the session's suspicion state, or null if unknown. */
   getState(sessionId: string): SessionSuspicionState | null {
     const state = this.sessions.get(sessionId);
-    return state ? { ...state } : null;
+    if (!state) return null;
+    return {
+      ...state,
+      rollingFindings: state.rollingFindings ? [...state.rollingFindings] : undefined,
+    };
   }
 
   reset(sessionId: string): void {

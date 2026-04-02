@@ -7,6 +7,7 @@
 
 import type { DrawbridgeScanResult, DrawbridgeScannerConfig, SanitizeConfig, SanitizeResult } from "./scanner.js";
 import type { FrequencyTrackerConfig, FrequencyUpdateResult, EscalationTier } from "./frequency.js";
+import type { FrequencyTracker } from "../frequency/index.js";
 import type { BuiltInProfileId, CustomProfileDefinition } from "./profiles.js";
 import type { SyntacticFilterConfig, SyntacticFilterResult, SchemaValidationConfig, SchemaValidationResult, TwoPassConfig } from "./validation.js";
 import type { AuditEmitterConfig, TypedAuditEvent } from "./audit.js";
@@ -104,8 +105,16 @@ export interface DrawbridgePipelineConfig {
   /** Injected ClawMoat engine instance (for testing or custom setup) */
   engine?: unknown;
 
-  /** Frequency tracker config. Omit to use defaults. */
+  /** Frequency tracker config. Omit to use defaults. Ignored when `tracker` is provided. */
   frequency?: Partial<FrequencyTrackerConfig>;
+
+  /**
+   * Optional injected FrequencyTracker — enables shared state across multiple
+   * pipelines. When provided, `frequency` config is ignored; the injected
+   * tracker's config takes precedence. Both pipelines must be on the same
+   * event loop; mutations are visible cross-pipeline immediately.
+   */
+  tracker?: FrequencyTracker;
 
   /** Context profile selection. Default: "general" */
   profile?: BuiltInProfileId | CustomProfileDefinition;

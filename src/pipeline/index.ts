@@ -105,10 +105,15 @@ export class DrawbridgePipeline {
       ? new SchemaValidator(cfg.schema)
       : null;
 
-    // 3. Build frequency tracker config (profile applies weight/threshold overrides)
-    const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
-    this.tracker = new FrequencyTracker(frequencyConfig);
-    this.tier1Threshold = frequencyConfig.thresholds.tier1;
+    // 3. Build frequency tracker (injected or profile-derived)
+    if (cfg.tracker) {
+      this.tracker = cfg.tracker;
+      this.tier1Threshold = cfg.tracker.thresholds.tier1;
+    } else {
+      const frequencyConfig = this.profile.applyFrequencyConfig(cfg.frequency);
+      this.tracker = new FrequencyTracker(frequencyConfig);
+      this.tier1Threshold = frequencyConfig.thresholds.tier1;
+    }
 
     // 4. Scanner — pass through engine if provided for testing
     this.scanner = new DrawbridgeScanner(

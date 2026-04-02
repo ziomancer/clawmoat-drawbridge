@@ -18,7 +18,7 @@ Every module is standalone. Use them individually or wire them together.
 ## Install
 
 ```bash
-npm i @vigil-harbor/clawmoat-drawbridge
+npm install @vigil-harbor/clawmoat-drawbridge clawmoat
 ```
 
 ## Modules
@@ -31,7 +31,7 @@ Wraps ClawMoat with threshold filtering, direction-aware scanning (inbound/outbo
 <summary>Usage</summary>
 
 ```ts
-import { DrawbridgeScanner } from "@ziomancer/clawmoat-drawbridge";
+import { DrawbridgeScanner } from "@vigil-harbor/clawmoat-drawbridge";
 
 const scanner = new DrawbridgeScanner({
   blockThreshold: "medium",
@@ -53,7 +53,7 @@ Pure-function pattern matching — catches injection phrases, structural anomali
 <summary>Usage</summary>
 
 ```ts
-import { PreFilter } from "@ziomancer/clawmoat-drawbridge";
+import { PreFilter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const filter = new PreFilter();
 const result = filter.run(content);
@@ -71,7 +71,7 @@ Per-session exponential-decay suspicion scoring with rolling window counter. Fin
 <summary>Usage</summary>
 
 ```ts
-import { FrequencyTracker } from "@ziomancer/clawmoat-drawbridge";
+import { FrequencyTracker } from "@vigil-harbor/clawmoat-drawbridge";
 
 const tracker = new FrequencyTracker();
 const result = tracker.update(sessionId, scanResult.findings.map(f => f.ruleId));
@@ -110,7 +110,7 @@ Deployment-specific tuning. Five built-in profiles (general, customer-service, c
 <summary>Usage</summary>
 
 ```ts
-import { ProfileResolver, PreFilter, FrequencyTracker } from "@ziomancer/clawmoat-drawbridge";
+import { ProfileResolver, PreFilter, FrequencyTracker } from "@vigil-harbor/clawmoat-drawbridge";
 
 const profile = new ProfileResolver("admin");
 const filter = new PreFilter(profile.applySyntacticConfig());
@@ -127,7 +127,7 @@ Structured event emission gated by four verbosity tiers (minimal → standard �
 <summary>Usage</summary>
 
 ```ts
-import { AuditEmitter } from "@ziomancer/clawmoat-drawbridge";
+import { AuditEmitter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const audit = new AuditEmitter({
   verbosity: "standard",
@@ -144,7 +144,7 @@ Evaluates audit events against configurable rules. Cross-session burst detection
 <summary>Usage</summary>
 
 ```ts
-import { AlertManager, AuditEmitter } from "@ziomancer/clawmoat-drawbridge";
+import { AlertManager, AuditEmitter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const alerts = new AlertManager({
   onAlert: (alert) => pagerduty.send(alert),
@@ -167,7 +167,7 @@ Validates MCP tool output against registered schemas with discriminated union su
 <summary>Usage</summary>
 
 ```ts
-import { SchemaValidator } from "@ziomancer/clawmoat-drawbridge";
+import { SchemaValidator } from "@vigil-harbor/clawmoat-drawbridge";
 
 const validator = new SchemaValidator({
   enabled: true,
@@ -208,7 +208,7 @@ Single `inspect()` call that orchestrates every stage: trust check, pre-filter, 
 <summary>Usage</summary>
 
 ```ts
-import { DrawbridgePipeline } from "@ziomancer/clawmoat-drawbridge";
+import { DrawbridgePipeline } from "@vigil-harbor/clawmoat-drawbridge";
 
 const pipeline = new DrawbridgePipeline({
   profile: "admin",
