@@ -242,7 +242,7 @@ Drawbridge's `DrawbridgePipeline` accepts an injected `engine` prop, so the inte
 
 ## 9. File Layout
 
-```
+```text
 extensions/drawbridge/
 ├── openclaw.plugin.json
 ├── package.json
