@@ -5,19 +5,18 @@
  */
 
 import type { TypedAuditEvent } from "./audit.js";
-import { deepFreeze } from "./common.js";
 
 /** Alert severity levels */
 export type AlertSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 /** Alert severity ranking for comparison */
-export const ALERT_SEVERITY_RANK: Record<AlertSeverity, number> = Object.freeze({
+export const ALERT_SEVERITY_RANK: Record<AlertSeverity, number> = {
   info: 1,
   low: 2,
   medium: 3,
   high: 4,
   critical: 5,
-});
+};
 
 /** Alert rule identifiers */
 export type AlertRuleId =
@@ -132,7 +131,7 @@ export interface AlertManagerConfig {
 }
 
 /** Default alert rule configuration */
-export const DEFAULT_ALERT_RULES: AlertRuleConfigs = deepFreeze({
+export const DEFAULT_ALERT_RULES: AlertRuleConfigs = {
   syntacticFailBurst: {
     enabled: true,
     count: 5,
@@ -154,10 +153,10 @@ export const DEFAULT_ALERT_RULES: AlertRuleConfigs = deepFreeze({
   trustedToolSchemaFail: {
     enabled: true,
   },
-});
+};
 
 /** Default alert manager configuration */
-export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = deepFreeze({
+export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = {
   enabled: true,
   rules: DEFAULT_ALERT_RULES,
   suppressionWindowMinutes: 5,
@@ -166,4 +165,4 @@ export const DEFAULT_ALERT_CONFIG: AlertManagerConfig = deepFreeze({
     maxPerHour: 100,
   },
   recentContextMax: 20,
-});
+};

@@ -6,12 +6,10 @@
  * Spec reference: Input Validation Layers v2.3, §Within-Session Frequency Tracking
  */
 
-import { deepFreeze } from "./common.js";
-
 /** Escalation tier resulting from frequency score evaluation */
 export type EscalationTier = "none" | "tier1" | "tier2" | "tier3";
 
-/** Per-session suspicion state */
+/** Per-session suspicion state (O(1) storage — two floats + one boolean) */
 export interface SessionSuspicionState {
   /** Cumulative decayed score */
   lastScore: number;
@@ -19,8 +17,6 @@ export interface SessionSuspicionState {
   lastUpdateMs: number;
   /** Set to true when score crosses tier3 threshold. Irreversible for session. */
   terminated?: boolean;
-  /** Timestamps of findings within the rolling window (for low-and-slow detection) */
-  rollingFindings?: number[];
 }
 
 /** Frequency tracker configuration */
@@ -36,18 +32,6 @@ export interface FrequencyConfig {
     tier2: number;
     tier3: number;
   };
-  /**
-   * Rolling window duration in milliseconds.
-   * If a session accumulates rollingThreshold findings within this window,
-   * escalation triggers regardless of decay score.
-   * Default: 3_600_000 (1 hour)
-   */
-  rollingWindowMs: number;
-  /**
-   * Number of findings within rollingWindowMs that triggers escalation.
-   * Default: 10
-   */
-  rollingThreshold: number;
 }
 
 /** Memory management configuration */
@@ -64,13 +48,6 @@ export interface FrequencyMemoryConfig {
    * Default: 10_000
    */
   maxSessions: number;
-
-  /**
-   * Maximum number of new sessions that can be created per minute.
-   * Prevents session-flooding attacks that evict legitimate sessions.
-   * Default: 100
-   */
-  maxNewSessionsPerMinute: number;
 }
 
 /** Full configuration including memory management */
@@ -79,7 +56,7 @@ export interface FrequencyTrackerConfig extends FrequencyConfig {
 }
 
 /** Default frequency configuration */
-export const DEFAULT_FREQUENCY_CONFIG: FrequencyConfig = deepFreeze({
+export const DEFAULT_FREQUENCY_CONFIG: FrequencyConfig = {
   enabled: true,
   halfLifeMs: 60_000,
   weights: {
@@ -96,16 +73,13 @@ export const DEFAULT_FREQUENCY_CONFIG: FrequencyConfig = deepFreeze({
     tier2: 30,
     tier3: 50,
   },
-  rollingWindowMs: 3_600_000,
-  rollingThreshold: 10,
-});
+};
 
 /** Defaults for memory management */
-export const DEFAULT_MEMORY_CONFIG: FrequencyMemoryConfig = Object.freeze({
+export const DEFAULT_MEMORY_CONFIG: FrequencyMemoryConfig = {
   sessionTtlMs: 3_600_000,
   maxSessions: 10_000,
-  maxNewSessionsPerMinute: 100,
-});
+};
 
 /** Result of a frequency score update */
 export interface FrequencyUpdateResult {
