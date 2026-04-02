@@ -1,10 +1,12 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   resolve: {
     alias: {
-      "@vigil-harbor/clawmoat-drawbridge": path.resolve(__dirname, "../../src/index.ts"),
+      "@vigil-harbor/clawmoat-drawbridge": fileURLToPath(
+        new URL("../../src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
