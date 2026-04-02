@@ -62,7 +62,7 @@ export function handleBeforeDispatch(
 
     return PASS;
   } catch (err) {
-    const msg = String((err as Error).message ?? err).slice(0, 200);
+    const msg = String((err as Error)?.message ?? err ?? "unknown error").slice(0, 200);
     console.warn("[drawbridge:before_dispatch] Fail-open:", msg);
     return PASS;
   }

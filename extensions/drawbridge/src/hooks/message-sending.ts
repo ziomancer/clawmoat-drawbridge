@@ -47,7 +47,7 @@ export function handleMessageSending(
 
     return PASS;
   } catch (err) {
-    const msg = String((err as Error).message ?? err).slice(0, 200);
+    const msg = String((err as Error)?.message ?? err ?? "unknown error").slice(0, 200);
     console.warn("[drawbridge:message_sending] Fail-open:", msg);
     return PASS;
   }
