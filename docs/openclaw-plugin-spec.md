@@ -65,16 +65,13 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
 
 **Returns:** `{ handled: boolean; text?: string }`
 
-**Action:**
-1. Read cached scan result from 3.1 (keyed by `sha256(content + "\0" + sessionId)` to avoid double-scan while maintaining session isolation)
-2. If `result.safe === false`:
-   - Return `{ handled: true, text: "<configurable rejection message>" }`
-   - Message never reaches the agent
-3. If `result.terminated === true` (tier3 escalation):
-   - Return `{ handled: true, text: "<session terminated message>" }`
-4. If `result.escalationTier === "tier2"`:
-   - Optionally flag but allow through (configurable: `tier2Action: "warn" | "block"`)
-5. Otherwise: return `{ handled: false }` — normal dispatch
+**Action (precedence order — evaluated top to bottom, first match wins):**
+1. Check session termination first: if `tracker.getState(sessionId)?.terminated`, return `{ handled: true, text: "<session terminated message>" }` immediately — no scan needed
+2. Read cached scan result from 3.1 (keyed by `sha256(content + "\0" + sessionId)`) or re-scan on cache miss
+3. If `result.terminated === true` (tier3 reached during this scan): return `{ handled: true, text: "<session terminated message>" }`
+4. If `result.safe === false`: return `{ handled: true, text: "<configurable rejection message>" }` — message never reaches the agent
+5. If `result.escalationTier === "tier2"`: optionally block (configurable: `tier2Action: "warn" | "block"`)
+6. Otherwise: return `{ handled: false }` — normal dispatch
 
 ### 3.3 `message_sending` — Outbound Gate
 
@@ -108,7 +105,9 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
 { runId: string; sessionId: string; provider: string; model: string; assistantTexts: string[]; ... }
 ```
 
-**Action:** Lightweight scan for audit/telemetry only. No blocking. Captures pre-formatting model output for forensics if `message_sending` later triggers a block.
+**Action:** Lightweight audit capture only. No pipeline scan, no blocking. Captures pre-formatting model output for forensics if `message_sending` later triggers a block.
+
+**Exemptions:** Intentionally bypassed. Forensic capture is universal regardless of channel/sender exemptions. Exemptions control scanning and blocking (hooks 3.1–3.3), not audit trail completeness.
 
 ---
 
