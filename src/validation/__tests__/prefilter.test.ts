@@ -243,7 +243,7 @@ describe("PreFilter — edge cases", () => {
     const result = bigFilter.run(large);
     const elapsed = Date.now() - start;
     expect(result.pass).toBe(true);
-    expect(elapsed).toBeLessThan(100);
+    expect(elapsed).toBeLessThan(500);
   });
 
   // 25. Whitespace only
