@@ -1,6 +1,6 @@
 {
   "name": "@vigil-harbor/clawmoat-drawbridge",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Session-aware content sanitization pipeline powered by ClawMoat. Standalone library — wire into any agent pipeline.",
   "exports": {
