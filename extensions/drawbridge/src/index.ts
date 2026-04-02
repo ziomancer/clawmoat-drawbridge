@@ -128,7 +128,9 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
       api.registerHook(
         "gateway:stop",
         async () => {
-          const state = await getState();
+          // Only tear down if init already happened — never trigger lazy init during shutdown
+          if (!stateP) return;
+          const state = await stateP;
           if (!state) return;
           handleGatewayStop(state);
         },

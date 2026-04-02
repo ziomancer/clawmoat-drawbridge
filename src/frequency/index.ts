@@ -230,6 +230,7 @@ export class FrequencyTracker {
 
   clear(): void {
     this.sessions.clear();
+    this.sessionCreationTimestamps.length = 0;
   }
 
   get size(): number {

@@ -179,7 +179,7 @@ export class AlertManager {
       // evaluate() must NEVER throw — a failed evaluation is not an alert (Finding #15)
       // Surface the error via onError for observability while preserving fail-open.
       try {
-        this.config.onError?.(error, null as unknown as AlertPayload);
+        this.config.onError?.(error, null);
       } catch {
         // swallow completely — alerting must never crash pipeline
       }

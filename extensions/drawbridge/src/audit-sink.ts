@@ -113,6 +113,9 @@ export function createAuditSink(
   alertNotify?: AlertNotifyFn,
 ): AuditSink {
   const logSink = new LogSink();
+  if (mode !== "log" && !vhIngest) {
+    console.warn(`[drawbridge] auditSink="${mode}" but no vhIngest callback provided — falling back to log-only`);
+  }
   if (mode === "log" || !vhIngest) return logSink;
 
   const vhSink = new VigilHarborSink(vhIngest, alertNotify);

@@ -128,7 +128,7 @@ export interface AlertManagerConfig {
    * Error handler. Called if onAlert throws.
    * Alerting must never crash the pipeline.
    */
-  onError?: (error: unknown, alert: AlertPayload) => void;
+  onError?: (error: unknown, alert: AlertPayload | null) => void;
 }
 
 /** Default alert rule configuration */

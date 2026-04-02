@@ -46,7 +46,7 @@ export class AuditEmitter {
     this.config = { ...DEFAULT_AUDIT_CONFIG, ...config };
 
     // Validate verbosity is a recognized key (Finding #18)
-    if (!(this.config.verbosity in VERBOSITY_RANK)) {
+    if (!Object.hasOwn(VERBOSITY_RANK, this.config.verbosity)) {
       throw new Error(
         `AuditEmitter: invalid verbosity "${this.config.verbosity}". ` +
         `Valid values: ${Object.keys(VERBOSITY_RANK).join(", ")}`,
