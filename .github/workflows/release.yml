@@ -1,14 +1,16 @@
-name: CI
+name: Release
 
 on:
-  push:
-    branches: [master, feature/**]
-  pull_request:
-    branches: [master]
+  release:
+    types: [published]
 
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -17,6 +19,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       - run: npm ci
 
@@ -32,3 +35,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Publish
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
