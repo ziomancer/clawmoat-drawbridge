@@ -1,0 +1,11 @@
+language: en
+reviews:
+  auto_review:
+    enabled: true
+    drafts: false
+  request_changes_workflow: true
+  path_instructions:
+    - path: "src/**"
+      instructions: "Security-sensitive sanitization library. Flag bypasses, unhandled edge cases, or places where unsanitized content could leak through."
+    - path: "src/pipeline/**"
+      instructions: "Pipeline integration code. Verify config is forwarded correctly through all module boundaries."
