@@ -99,9 +99,9 @@ export class AlertManager {
         `got ${this.config.rateLimit.maxPerHour}`,
       );
     }
-    if (this.config.recentContextMax < 0) {
+    if (!Number.isFinite(this.config.recentContextMax) || !Number.isInteger(this.config.recentContextMax) || this.config.recentContextMax < 0) {
       throw new Error(
-        `AlertManager: recentContextMax must be non-negative, got ${this.config.recentContextMax}`,
+        `AlertManager: recentContextMax must be a non-negative finite integer, got ${this.config.recentContextMax}`,
       );
     }
 

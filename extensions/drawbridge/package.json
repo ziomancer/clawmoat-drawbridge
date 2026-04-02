@@ -31,7 +31,7 @@
   "author": "Vigil Harbor, LLC",
   "license": "MIT",
   "dependencies": {
-    "@vigil-harbor/clawmoat-drawbridge": "file:../../"
+    "@vigil-harbor/clawmoat-drawbridge": "^1.1.0"
   },
   "peerDependencies": {
     "clawmoat": ">=0.7.0",

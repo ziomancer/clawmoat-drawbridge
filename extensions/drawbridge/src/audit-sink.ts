@@ -37,6 +37,18 @@ export class LogSink implements AuditSink {
   }
 }
 
+/** Drain a possibly-async callback result without unhandled rejection. */
+function drainAsync(fn: () => void): void {
+  try {
+    const result: unknown = fn();
+    if (result && typeof (result as Promise<unknown>).catch === "function") {
+      (result as Promise<unknown>).catch(() => {});
+    }
+  } catch {
+    // Swallowed — audit/alert failures must never propagate
+  }
+}
+
 export class VigilHarborSink implements AuditSink {
   constructor(
     private readonly ingest: VigilHarborIngestFn,
@@ -44,36 +56,25 @@ export class VigilHarborSink implements AuditSink {
   ) {}
 
   emit(event: TypedAuditEvent): void {
-    try {
-      this.ingest(
-        "drawbridge_audit",
-        "security",
-        ["drawbridge", event.event],
-        JSON.stringify(event),
-      );
-    } catch {
-      // Fire-and-forget — audit failures must never block message delivery
-    }
+    drainAsync(() => this.ingest(
+      "drawbridge_audit",
+      "security",
+      ["drawbridge", event.event],
+      JSON.stringify(event),
+    ));
   }
 
   alert(payload: AlertPayload): void {
-    try {
-      this.ingest(
-        "drawbridge_alert",
-        "security",
-        ["drawbridge", "alert", payload.severity],
-        JSON.stringify(payload),
-      );
-    } catch {
-      // Silently dropped
-    }
+    drainAsync(() => this.ingest(
+      "drawbridge_alert",
+      "security",
+      ["drawbridge", "alert", payload.severity],
+      JSON.stringify(payload),
+    ));
 
     if (this.notify && (payload.severity === "high" || payload.severity === "critical")) {
-      try {
-        this.notify(payload.severity, `[Drawbridge ${payload.severity}] ${payload.ruleId}: ${payload.summary}`);
-      } catch {
-        // Silently dropped
-      }
+      const notify = this.notify;
+      drainAsync(() => notify(payload.severity, `[Drawbridge ${payload.severity}] ${payload.ruleId}: ${payload.summary}`));
     }
   }
 }

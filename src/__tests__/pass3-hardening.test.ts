@@ -101,7 +101,7 @@ describe("config validation", () => {
 
   it("recentContextMax: -1 throws", () => {
     expect(() => new AlertManager({ recentContextMax: -1 })).toThrow(
-      /recentContextMax must be non-negative/,
+      /recentContextMax must be a non-negative finite integer/,
     );
   });
 

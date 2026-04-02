@@ -66,7 +66,7 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
 **Returns:** `{ handled: boolean; text?: string }`
 
 **Action:**
-1. Read cached scan result from 3.1 (keyed by content hash to avoid double-scan)
+1. Read cached scan result from 3.1 (keyed by `sha256(content + "\0" + sessionId)` to avoid double-scan while maintaining session isolation)
 2. If `result.safe === false`:
    - Return `{ handled: true, text: "<configurable rejection message>" }`
    - Message never reaches the agent
@@ -97,7 +97,7 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
    - If no salvageable content: return `{ cancel: true }` — message dropped
 3. If safe: return `{}` (no modification)
 
-**Outbound profile:** Use `"assistant-outbound"` profile (lower injection thresholds, higher PII sensitivity — the model shouldn't be leaking user data or echoing injected prompts).
+**Outbound profile:** Use `"customer-service"` profile (lower injection thresholds, higher PII sensitivity — the model shouldn't be leaking user data or echoing injected prompts).
 
 ### 3.4 `llm_output` — Observational
 
@@ -153,7 +153,7 @@ Both share a single `FrequencyTracker` so session escalation is unified across d
 
           // --- Audit ---
           "auditSink": "log",           // "log" | "vigil-harbor" | "both"
-          "auditVerbosity": "normal",   // "quiet" | "normal" | "verbose"
+          "auditVerbosity": "standard", // "minimal" | "standard" | "high" | "maximum"
 
           // --- Channels ---
           "exemptChannels": [],         // Channel IDs to skip scanning

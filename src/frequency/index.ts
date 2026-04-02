@@ -75,6 +75,23 @@ export class FrequencyTracker {
       );
     }
 
+    // Validate rolling-window knobs
+    if (!Number.isFinite(this.config.rollingWindowMs) || this.config.rollingWindowMs <= 0) {
+      throw new Error(
+        `FrequencyTracker: rollingWindowMs must be a positive finite number. Got ${this.config.rollingWindowMs}`,
+      );
+    }
+    if (!Number.isFinite(this.config.rollingThreshold) || this.config.rollingThreshold <= 0 || !Number.isInteger(this.config.rollingThreshold)) {
+      throw new Error(
+        `FrequencyTracker: rollingThreshold must be a positive integer. Got ${this.config.rollingThreshold}`,
+      );
+    }
+    if (!Number.isFinite(this.config.memory.maxNewSessionsPerMinute) || this.config.memory.maxNewSessionsPerMinute <= 0 || !Number.isInteger(this.config.memory.maxNewSessionsPerMinute)) {
+      throw new Error(
+        `FrequencyTracker: maxNewSessionsPerMinute must be a positive integer. Got ${this.config.memory.maxNewSessionsPerMinute}`,
+      );
+    }
+
     this.sessions = new Map();
 
     // Pre-partition weight keys into exact and glob for fast matching

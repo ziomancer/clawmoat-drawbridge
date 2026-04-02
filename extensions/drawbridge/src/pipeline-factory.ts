@@ -215,9 +215,17 @@ export function cacheGet(cache: Map<string, ScanCacheEntry>, key: string): Pipel
 }
 
 /**
- * Write to scan cache. Skips if cache is at max capacity.
+ * Write to scan cache. Purges expired entries before checking capacity.
  */
 export function cacheSet(cache: Map<string, ScanCacheEntry>, key: string, result: PipelineResult): void {
-  if (cache.size >= CACHE_MAX_SIZE) return;
+  if (cache.size >= CACHE_MAX_SIZE) {
+    // Purge expired entries before giving up — prevents a burst of unique
+    // keys from locking the cache into a permanently "full" state.
+    const now = Date.now();
+    for (const [k, entry] of cache) {
+      if (now - entry.ts > CACHE_TTL_MS) cache.delete(k);
+    }
+    if (cache.size >= CACHE_MAX_SIZE) return;
+  }
   cache.set(key, { result, ts: Date.now() });
 }

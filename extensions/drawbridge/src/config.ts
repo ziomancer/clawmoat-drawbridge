@@ -68,7 +68,14 @@ export function resolveConfig(input?: DrawbridgePluginConfig): ResolvedConfig {
   return {
     inboundProfile: cfg.inboundProfile ?? "general",
     outboundProfile: cfg.outboundProfile ?? "customer-service",
-    frequency: cfg.frequency,
+    frequency: cfg.frequency
+      ? {
+          ...cfg.frequency,
+          weights: cfg.frequency.weights ? { ...cfg.frequency.weights } : undefined,
+          thresholds: cfg.frequency.thresholds ? { ...cfg.frequency.thresholds } : undefined,
+          memory: cfg.frequency.memory ? { ...cfg.frequency.memory } : undefined,
+        }
+      : undefined,
     blockThreshold: cfg.blockThreshold ?? "medium",
     direction: cfg.direction ?? "both",
     tier2Action: cfg.tier2Action ?? "warn",
