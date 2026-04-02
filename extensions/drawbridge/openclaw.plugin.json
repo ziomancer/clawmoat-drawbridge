@@ -1,0 +1,8 @@
+{
+  "id": "drawbridge",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {}
+  }
+}
