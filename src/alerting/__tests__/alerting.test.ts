@@ -81,7 +81,7 @@ describe("Rule 1: syntactic fail burst", () => {
         writeFailSpike: { enabled: true, count: 3, windowMinutes: 5 },
       },
       // Disable dedup so we can see all alerts
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     // Feed 3 events at t=0
@@ -328,7 +328,7 @@ describe("Rule 4: scan block after syntactic pass", () => {
 
   it("16 — after escalateAfter occurrences, severity escalates to high", () => {
     const { manager, alerts } = createTestManager({
-      suppressionWindowMinutes: 0, // Disable dedup for this test
+      suppressionWindowMinutes: 0.001, // Disable dedup for this test
     });
 
     for (let i = 0; i < 4; i++) {
@@ -509,7 +509,7 @@ describe("Rate limiting", () => {
   it("23 — 21st alert in one minute is rate limited (limit=20)", () => {
     const { manager, alerts } = createTestManager({
       rateLimit: { maxPerMinute: 20, maxPerHour: 100 },
-      suppressionWindowMinutes: 0, // Disable dedup
+      suppressionWindowMinutes: 0.001, // Disable dedup
     });
 
     // Fire 21 distinct alerts (use tier2 from different sessions)
@@ -534,7 +534,7 @@ describe("Rate limiting", () => {
       enabled: true,
       onAlert,
       rateLimit: { maxPerMinute: 2, maxPerHour: 100 },
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     for (let i = 0; i < 4; i++) {
@@ -554,7 +554,7 @@ describe("Rate limiting", () => {
   it("25 — rate limit resets after 1 minute", () => {
     const { manager, alerts } = createTestManager({
       rateLimit: { maxPerMinute: 2, maxPerHour: 100 },
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     // Fill minute limit
@@ -611,7 +611,7 @@ describe("Error handling", () => {
       onAlert: () => {
         throw new Error("boom");
       },
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     expect(() => {
@@ -634,7 +634,7 @@ describe("Error handling", () => {
         throw new Error("delivery failed");
       },
       onError,
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     manager.evaluate(
@@ -659,7 +659,7 @@ describe("Error handling", () => {
       onError: () => {
         throw new Error("error handler also failed");
       },
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     expect(() => {
@@ -689,7 +689,7 @@ describe("Integration flow", () => {
 
   it("29 — realistic sequence fires correct alerts", () => {
     const { manager, alerts } = createTestManager({
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     // 3 syntactic_pass events (indexed for Rule 4 correlation)
@@ -762,7 +762,7 @@ describe("Stats", () => {
 
   it("30 — alerts count matches deliveries", () => {
     const { manager, alerts } = createTestManager({
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     manager.evaluate(
@@ -803,7 +803,7 @@ describe("Stats", () => {
   it("32 — rateLimited count matches rate limit drops", () => {
     const { manager } = createTestManager({
       rateLimit: { maxPerMinute: 3, maxPerHour: 100 },
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     for (let i = 0; i < 5; i++) {
@@ -823,7 +823,7 @@ describe("Stats", () => {
 
   it("33 — clear() resets all state and counters", () => {
     const { manager, alerts } = createTestManager({
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     // Build up some state
@@ -914,7 +914,7 @@ describe("Alert payload shape", () => {
   it("37 — recentContext capped at recentContextMax", () => {
     const { manager, alerts } = createTestManager({
       recentContextMax: 3,
-      suppressionWindowMinutes: 0,
+      suppressionWindowMinutes: 0.001,
     });
 
     // Feed 10 events into session, then trigger an alert

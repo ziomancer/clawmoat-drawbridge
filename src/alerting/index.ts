@@ -80,6 +80,31 @@ export class AlertManager {
       },
     };
 
+    // Validate config values (Finding #19)
+    if (!Number.isFinite(this.config.suppressionWindowMinutes) || this.config.suppressionWindowMinutes <= 0) {
+      throw new Error(
+        `AlertManager: suppressionWindowMinutes must be a positive finite number, ` +
+        `got ${this.config.suppressionWindowMinutes}`,
+      );
+    }
+    if (!Number.isInteger(this.config.rateLimit.maxPerMinute) || this.config.rateLimit.maxPerMinute < 1) {
+      throw new Error(
+        `AlertManager: rateLimit.maxPerMinute must be a positive integer, ` +
+        `got ${this.config.rateLimit.maxPerMinute}`,
+      );
+    }
+    if (!Number.isInteger(this.config.rateLimit.maxPerHour) || this.config.rateLimit.maxPerHour < 1) {
+      throw new Error(
+        `AlertManager: rateLimit.maxPerHour must be a positive integer, ` +
+        `got ${this.config.rateLimit.maxPerHour}`,
+      );
+    }
+    if (!Number.isFinite(this.config.recentContextMax) || !Number.isInteger(this.config.recentContextMax) || this.config.recentContextMax < 0) {
+      throw new Error(
+        `AlertManager: recentContextMax must be a non-negative finite integer, got ${this.config.recentContextMax}`,
+      );
+    }
+
     this.eventIndex = new Map();
     this.dedupMap = new Map();
     this.minuteTimestamps = [];
@@ -99,55 +124,61 @@ export class AlertManager {
   evaluate(event: TypedAuditEvent): AlertPayload | null {
     if (!this.config.enabled) return null;
 
-    // 1. Index the event
-    this.indexEvent(event);
+    try {
+      // 1. Index the event
+      this.indexEvent(event);
 
-    // 2. Evaluate rules
-    let alert: AlertPayload | null = null;
+      // 2. Evaluate rules
+      let alert: AlertPayload | null = null;
 
-    switch (event.event) {
-      case "syntactic_fail":
-        alert = this.evaluateSyntacticFailBurst(event);
-        break;
+      switch (event.event) {
+        case "syntactic_fail":
+          alert = this.evaluateSyntacticFailBurst(event);
+          break;
 
-      case "syntactic_pass":
-        this.indexSyntacticPass(event);
-        break;
+        case "syntactic_pass":
+          this.indexSyntacticPass(event);
+          break;
 
-      case "frequency_escalation_tier2":
-        alert = this.evaluateFrequencyEscalation(event, "tier2", "high");
-        break;
+        case "frequency_escalation_tier2":
+          alert = this.evaluateFrequencyEscalation(event, "tier2", "high");
+          break;
 
-      case "frequency_escalation_tier3":
-        alert = this.evaluateFrequencyEscalation(event, "tier3", "critical");
-        break;
+        case "frequency_escalation_tier3":
+          alert = this.evaluateFrequencyEscalation(event, "tier3", "critical");
+          break;
 
-      case "scan_block":
-        alert = this.evaluateScanBlockAfterSyntacticPass(event);
-        break;
+        case "scan_block":
+          alert = this.evaluateScanBlockAfterSyntacticPass(event);
+          break;
 
-      case "schema_fail":
-        alert = this.evaluateTrustedToolSchemaFail(event);
-        break;
+        case "schema_fail":
+          alert = this.evaluateTrustedToolSchemaFail(event);
+          break;
 
-      // write_failed not yet a Drawbridge audit event — writeFailSpike deferred
-    }
-
-    // 3. Apply dedup and rate limiting
-    if (alert) {
-      if (this.isDuplicate(alert)) {
-        this.suppressedCount++;
-        return null;
+        // write_failed not yet a Drawbridge audit event — writeFailSpike deferred
       }
-      if (this.isRateLimited()) {
-        this.rateLimitedCount++;
-        return null;
-      }
-      this.deliver(alert);
-      return alert;
-    }
 
-    return null;
+      // 3. Apply dedup and rate limiting
+      if (alert) {
+        if (this.isDuplicate(alert)) {
+          this.suppressedCount++;
+          return null;
+        }
+        // Critical alerts are never rate-limited (Finding #10)
+        if (alert.severity !== "critical" && this.isRateLimited()) {
+          this.rateLimitedCount++;
+          return null;
+        }
+        this.deliver(alert);
+        return alert;
+      }
+
+      return null;
+    } catch {
+      // evaluate() must NEVER throw — a failed evaluation is not an alert (Finding #15)
+      return null;
+    }
   }
 
   // ---------------------------------------------------------------------------

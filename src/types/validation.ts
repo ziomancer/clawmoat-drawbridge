@@ -5,6 +5,8 @@
  * Spec reference: Input Validation Layers v2.3
  */
 
+import { deepFreeze } from "./common.js";
+
 /** Syntactic pre-filter configuration */
 export interface SyntacticFilterConfig {
   /** Maximum raw payload size in bytes before structural block. Default: 524288 (512KB) */
@@ -20,11 +22,11 @@ export interface SyntacticFilterConfig {
 }
 
 /** Default syntactic pre-filter configuration */
-export const DEFAULT_SYNTACTIC_CONFIG: SyntacticFilterConfig = {
+export const DEFAULT_SYNTACTIC_CONFIG: SyntacticFilterConfig = deepFreeze({
   maxPayloadBytes: 524_288,
   maxJsonDepth: 10,
   suppressRules: [],
-};
+});
 
 /** Syntactic pre-filter result */
 export interface SyntacticFilterResult {
@@ -131,11 +133,11 @@ export interface SchemaValidationConfig {
 }
 
 /** Default schema validation configuration (disabled by default) */
-export const DEFAULT_SCHEMA_CONFIG: SchemaValidationConfig = {
+export const DEFAULT_SCHEMA_CONFIG: SchemaValidationConfig = deepFreeze({
   enabled: false,
   toolSchemas: {},
   defaultBehavior: "strict",
-};
+});
 
 /** Two-pass gating configuration */
 export interface TwoPassConfig {
@@ -145,8 +147,8 @@ export interface TwoPassConfig {
 }
 
 /** Default hard block rules (Drawbridge-prefixed) */
-export const DEFAULT_HARD_BLOCK_RULES = [
+export const DEFAULT_HARD_BLOCK_RULES = Object.freeze([
   "drawbridge.syntactic.injection.ignore-previous",
   "drawbridge.syntactic.injection.system-override",
   "drawbridge.syntactic.injection.role-switch-capability",
-] as const;
+] as const);
