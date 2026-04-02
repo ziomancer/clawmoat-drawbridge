@@ -57,6 +57,9 @@ export interface InitOptions {
  * Returns the engine instance or null on failure.
  */
 async function resolveClawMoatEngine(): Promise<unknown> {
+  let esmError: unknown;
+  let cjsError: unknown;
+
   try {
     // ESM path — named export
     const mod = await import("clawmoat");
@@ -68,8 +71,8 @@ async function resolveClawMoatEngine(): Promise<unknown> {
     if (ClawMoat && typeof (ClawMoat as Record<string, unknown>).scan === "function") {
       return ClawMoat;
     }
-  } catch {
-    // ESM import failed — try CJS fallback
+  } catch (err) {
+    esmError = err;
   }
 
   try {
@@ -83,10 +86,14 @@ async function resolveClawMoatEngine(): Promise<unknown> {
     if (ClawMoat && typeof ClawMoat.scan === "function") {
       return ClawMoat;
     }
-  } catch {
-    // CJS fallback also failed
+  } catch (err) {
+    cjsError = err;
   }
 
+  // Log actual errors so operators can distinguish "not installed" from
+  // "installed but broken" (native binding missing, version mismatch, etc.)
+  if (esmError) console.warn("[drawbridge] ESM import failed:", (esmError as Error).message);
+  if (cjsError) console.warn("[drawbridge] CJS fallback failed:", (cjsError as Error).message);
   return null;
 }
 
@@ -100,7 +107,7 @@ export async function initializePluginState(opts: InitOptions): Promise<PluginSt
   // 1. Resolve ClawMoat engine
   const engine = await resolveClawMoatEngine();
   if (!engine) {
-    console.warn("[drawbridge] ClawMoat engine not found — plugin disabled.");
+    console.warn("[drawbridge] ClawMoat engine could not be loaded — plugin disabled. Check that clawmoat and its native dependencies are installed.");
     return null;
   }
 

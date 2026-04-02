@@ -28,7 +28,12 @@ export function handleBeforeDispatch(
       return { handled: true, text: state.config.terminateMessage };
     }
 
-    // Read from cache (populated by message_received) or re-scan on miss
+    // Read from cache (populated by message_received) or re-scan on miss.
+    // Cache miss means content was modified between hooks (normalization,
+    // trimming) or the entry expired. Re-scanning is correct: the modified
+    // content needs its own threat assessment. The shared tracker will
+    // receive a second frequency update for what is logically the same
+    // turn — this is accepted as defense-in-depth (conservative scoring).
     const key = cacheKey(event.content, sessionId);
     let result = cacheGet(state.cache, key);
 
