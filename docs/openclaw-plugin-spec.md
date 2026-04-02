@@ -191,6 +191,7 @@ Future: expose a `/drawbridge reset <sessionKey>` command to manually clear a te
 OpenClaw provides `sessionKey` in hook context (composed from channel + conversation + sender). This maps directly to Drawbridge's `sessionId`:
 
 ```ts
+// channelId is always present in OpenClaw's HookContext (required by channel plugins)
 function deriveSessionId(ctx: HookContext, content: string, timestamp: number): string {
   // sessionKey is already unique per conversation participant
   if (ctx.sessionKey) return ctx.sessionKey;
@@ -251,7 +252,7 @@ Content hash uses Drawbridge's built-in `sha256()`. Cache entries expire after 5
 
 ## 8. ESM/CJS Interop
 
-Drawbridge is ESM (`"type": "module"`). OpenClaw extensions use ESM. ClawMoat's export style needs runtime verification (documented in memory: may need `import clawmoat from 'clawmoat'; const { ClawMoat } = clawmoat;` fallback).
+Drawbridge is ESM (`"type": "module"`). OpenClaw extensions use ESM. ClawMoat's export style requires runtime verification — depending on the installed version, you may need `import clawmoat from 'clawmoat'; const { ClawMoat } = clawmoat;` as a CJS-default-import fallback.
 
 Drawbridge's `DrawbridgePipeline` accepts an injected `engine` prop, so the interop fix surface is one line in plugin init.
 
