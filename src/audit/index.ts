@@ -27,6 +27,7 @@ import type {
 
 import {
   EVENT_MIN_VERBOSITY,
+  VERBOSITY_RANK,
   meetsVerbosity,
   DEFAULT_AUDIT_CONFIG,
 } from "../types/audit.js";
@@ -43,6 +44,15 @@ export class AuditEmitter {
 
   constructor(config?: Partial<AuditEmitterConfig>) {
     this.config = { ...DEFAULT_AUDIT_CONFIG, ...config };
+
+    // Validate verbosity is a recognized key (Finding #18)
+    if (!Object.hasOwn(VERBOSITY_RANK, this.config.verbosity)) {
+      throw new Error(
+        `AuditEmitter: invalid verbosity "${this.config.verbosity}". ` +
+        `Valid values: ${Object.keys(VERBOSITY_RANK).join(", ")}`,
+      );
+    }
+
     this.emitConfigLoaded();
   }
 

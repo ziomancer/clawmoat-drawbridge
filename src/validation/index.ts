@@ -12,6 +12,7 @@
 import type { SyntacticFilterConfig, SyntacticFilterResult, SchemaValidationConfig, SchemaValidationResult } from "../types/validation.js";
 import { DEFAULT_SYNTACTIC_CONFIG, DEFAULT_SCHEMA_CONFIG } from "../types/validation.js";
 import { safeStringify } from "../lib/safe-stringify.js";
+import { normalizeForDetection } from "./normalize.js";
 
 // ---------------------------------------------------------------------------
 // Frozen rule set — prevents config-injection on the filter itself
@@ -38,13 +39,14 @@ export const SYNTACTIC_RULES = Object.freeze({
   }),
   encodingRuleIds: Object.freeze({
     base64InText: "drawbridge.syntactic.encoding.base64-in-text",
-    nullByte: "drawbridge.syntactic.encoding.null-byte",
+    invisibleChars: "drawbridge.syntactic.encoding.invisible-chars",
     homoglyphSubstitution: "drawbridge.syntactic.encoding.homoglyph-substitution",
+    rtlOverride: "drawbridge.syntactic.encoding.rtl-override",
   }),
 } as const);
 
 /** All valid syntactic rule IDs — used by profiles for validation */
-export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = new Set([
+export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = Object.freeze(new Set([
   "drawbridge.syntactic.injection.ignore-previous",
   "drawbridge.syntactic.injection.ignore-all",
   "drawbridge.syntactic.injection.disregard",
@@ -59,40 +61,10 @@ export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = new Set([
   "drawbridge.syntactic.structural.excessive-depth",
   "drawbridge.syntactic.structural.binary-content",
   "drawbridge.syntactic.encoding.base64-in-text",
-  "drawbridge.syntactic.encoding.null-byte",
   "drawbridge.syntactic.encoding.homoglyph-substitution",
-]);
-
-// ---------------------------------------------------------------------------
-// Homoglyph normalization table (Cyrillic/Greek → Latin)
-// ---------------------------------------------------------------------------
-
-const HOMOGLYPH_MAP: ReadonlyMap<string, string> = new Map([
-  ["\u0430", "a"], // Cyrillic а → a
-  ["\u0435", "e"], // Cyrillic е → e
-  ["\u043E", "o"], // Cyrillic о → o
-  ["\u0440", "p"], // Cyrillic р → p
-  ["\u0441", "c"], // Cyrillic с → c
-  ["\u0443", "y"], // Cyrillic у → y
-  ["\u0456", "i"], // Cyrillic і → i
-  ["\u0455", "s"], // Cyrillic ѕ → s
-  ["\u0261", "g"], // Latin ɡ → g
-]);
-
-function normalizeHomoglyphs(text: string): string {
-  let result = "";
-  for (const ch of text) {
-    result += HOMOGLYPH_MAP.get(ch) ?? ch;
-  }
-  return result;
-}
-
-function contentHasHomoglyphs(text: string): boolean {
-  for (const ch of text) {
-    if (HOMOGLYPH_MAP.has(ch)) return true;
-  }
-  return false;
-}
+  "drawbridge.syntactic.encoding.invisible-chars",
+  "drawbridge.syntactic.encoding.rtl-override",
+]));
 
 // ---------------------------------------------------------------------------
 // JSON depth measurement
@@ -156,16 +128,24 @@ export class PreFilter {
     const flags: string[] = [];
     const fails = new Set<string>(); // ruleIds that cause pass=false
 
-    // ----- 1. Structural checks -----
-
-    // Payload size
+    // ----- 0. Payload size (before normalization — avoid processing oversized input) -----
     const byteLength = Buffer.byteLength(content, "utf8");
     if (byteLength > this.config.maxPayloadBytes) {
       const ruleId = SYNTACTIC_RULES.structuralRuleIds.oversizedPayload;
       ruleIds.push(ruleId);
       flags.push(`Payload ${byteLength} bytes exceeds limit ${this.config.maxPayloadBytes}`);
-      fails.add(ruleId); // structural always fails
+      fails.add(ruleId);
+      return { pass: false, flags, ruleIds };
     }
+
+    // ----- 1. Input normalization -----
+    // Strip invisibles, apply NFKC + homoglyph mapping. Pattern matching
+    // below runs against `normalized`; structural checks use raw `content`.
+    const norm = normalizeForDetection(content);
+    const normalized = norm.normalized;
+    let injectionMatchedOnNormalized = false;
+
+    // ----- 2. Structural checks -----
 
     // JSON depth
     try {
@@ -181,7 +161,7 @@ export class PreFilter {
       // Not valid JSON — skip depth check
     }
 
-    // Binary content (control chars excluding \t \n \r and \0 which is checked separately)
+    // Binary content (control chars excluding \t \n \r; \0 handled by normalization)
     // eslint-disable-next-line no-control-regex
     if (/[\x01-\x08\x0E-\x1F]/.test(content)) {
       const ruleId = SYNTACTIC_RULES.structuralRuleIds.binaryContent;
@@ -190,12 +170,13 @@ export class PreFilter {
       fails.add(ruleId); // structural always fails
     }
 
-    // ----- 2. Injection pattern scan -----
+    // ----- 3. Injection pattern scan -----
 
     for (const rule of SYNTACTIC_RULES.injectionPatterns) {
-      if (rule.pattern.test(content)) {
+      if (rule.pattern.test(normalized)) {
         ruleIds.push(rule.ruleId);
         flags.push(`Injection pattern matched: ${rule.ruleId}`);
+        injectionMatchedOnNormalized = true;
         if (!this.isSuppressed(rule.ruleId)) {
           fails.add(rule.ruleId);
         }
@@ -203,13 +184,14 @@ export class PreFilter {
     }
 
     // Role-switching detection
-    const hasTrigger = SYNTACTIC_RULES.roleSwitchTriggers.some((r) => r.test(content));
-    const hasGrant = SYNTACTIC_RULES.capabilityGrants.some((r) => r.test(content));
+    const hasTrigger = SYNTACTIC_RULES.roleSwitchTriggers.some((r) => r.test(normalized));
+    const hasGrant = SYNTACTIC_RULES.capabilityGrants.some((r) => r.test(normalized));
 
     if (hasTrigger && hasGrant) {
       const ruleId = "drawbridge.syntactic.injection.role-switch-capability";
       ruleIds.push(ruleId);
       flags.push("Role-switch with capability grant detected");
+      injectionMatchedOnNormalized = true;
       if (!this.isSuppressed(ruleId)) {
         fails.add(ruleId);
       }
@@ -220,17 +202,22 @@ export class PreFilter {
       // role-switch-only is ALWAYS flag-only, never fails
     }
 
-    // ----- 3. Encoding checks -----
+    // ----- 4. Encoding checks -----
 
-    // Null byte
-    if (content.includes("\0")) {
-      const ruleId = SYNTACTIC_RULES.encodingRuleIds.nullByte;
+    // Invisible characters (zero-width, null bytes, bidi controls)
+    if (norm.invisibleCharsStripped > 0) {
+      const ruleId = SYNTACTIC_RULES.encodingRuleIds.invisibleChars;
       ruleIds.push(ruleId);
-      flags.push("Null byte detected in content");
-      // encoding = flag only (does not fail at PreFilter level)
+      flags.push(`${norm.invisibleCharsStripped} invisible/zero-width character(s) stripped before analysis`);
+      // Escalation: obfuscation + injection = intentional attack.
+      // Even if the injection rule is suppressed by a profile, the
+      // presence of invisible chars alongside an injection phrase fails.
+      if (injectionMatchedOnNormalized) {
+        fails.add(ruleId);
+      }
     }
 
-    // Base64 in text
+    // Base64 in text (check raw content — base64 is content-level, not a confusable)
     if (/[A-Za-z0-9+/]{40,}={0,2}/.test(content)) {
       const ruleId = SYNTACTIC_RULES.encodingRuleIds.base64InText;
       ruleIds.push(ruleId);
@@ -238,41 +225,24 @@ export class PreFilter {
       // encoding = flag only
     }
 
-    // Homoglyph substitution
-    if (contentHasHomoglyphs(content)) {
-      const normalized = normalizeHomoglyphs(content);
-      // Check if normalization reveals injection patterns not found in original
-      const originalMatches = new Set<string>();
-      for (const rule of SYNTACTIC_RULES.injectionPatterns) {
-        if (rule.pattern.test(content)) originalMatches.add(rule.ruleId);
-      }
-
-      let homoglyphFound = false;
-      for (const rule of SYNTACTIC_RULES.injectionPatterns) {
-        if (rule.pattern.test(normalized) && !originalMatches.has(rule.ruleId)) {
-          homoglyphFound = true;
-          break;
-        }
-      }
-
-      // Also check role-switch triggers with normalized content
-      if (!homoglyphFound) {
-        const normalizedTrigger = SYNTACTIC_RULES.roleSwitchTriggers.some((r) => r.test(normalized));
-        const normalizedGrant = SYNTACTIC_RULES.capabilityGrants.some((r) => r.test(normalized));
-        if ((normalizedTrigger && !hasTrigger) || (normalizedGrant && !hasGrant)) {
-          homoglyphFound = true;
-        }
-      }
-
-      if (homoglyphFound) {
-        const ruleId = SYNTACTIC_RULES.encodingRuleIds.homoglyphSubstitution;
-        ruleIds.push(ruleId);
-        flags.push("Unicode homoglyph substitution detected in injection phrase");
-        // encoding = flag only
-      }
+    // Homoglyph / confusable substitution (NFKC + homoglyph map changed content
+    // AND injection patterns matched — the confusables may have enabled the match)
+    if (norm.confusablesNormalized && injectionMatchedOnNormalized) {
+      const ruleId = SYNTACTIC_RULES.encodingRuleIds.homoglyphSubstitution;
+      ruleIds.push(ruleId);
+      flags.push("Unicode confusable characters normalized (homoglyph/fullwidth/compatibility substitution)");
+      // encoding = flag only
     }
 
-    // ----- 4. Compute pass -----
+    // RTL override characters
+    if (norm.rtlOverridesDetected) {
+      const ruleId = SYNTACTIC_RULES.encodingRuleIds.rtlOverride;
+      ruleIds.push(ruleId);
+      flags.push("RTL/LTR override characters detected");
+      // encoding = flag only
+    }
+
+    // ----- 5. Compute pass -----
     // Structural rules cannot be suppressed. Injection rules respect suppressRules.
     // Encoding rules and role-switch-only are always flag-only.
 

@@ -1,0 +1,81 @@
+{
+  "id": "drawbridge",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "inboundProfile": {
+        "type": "string",
+        "description": "Inbound scanning profile ID",
+        "default": "general"
+      },
+      "outboundProfile": {
+        "type": "string",
+        "description": "Outbound scanning profile ID",
+        "default": "customer-service"
+      },
+      "frequency": {
+        "type": "object",
+        "description": "Shared FrequencyTracker config overrides",
+        "additionalProperties": true
+      },
+      "blockThreshold": {
+        "type": "string",
+        "enum": ["low", "medium", "high", "critical"],
+        "default": "medium"
+      },
+      "direction": {
+        "type": "string",
+        "enum": ["inbound", "outbound", "both"],
+        "default": "both"
+      },
+      "tier2Action": {
+        "type": "string",
+        "enum": ["warn", "block"],
+        "default": "warn"
+      },
+      "blockMessage": {
+        "type": "string",
+        "minLength": 1,
+        "default": "Message blocked by content filter."
+      },
+      "terminateMessage": {
+        "type": "string",
+        "minLength": 1,
+        "default": "Session terminated due to repeated violations."
+      },
+      "redactOutbound": {
+        "type": "boolean",
+        "default": true
+      },
+      "hashRedactions": {
+        "type": "boolean",
+        "default": true
+      },
+      "auditSink": {
+        "type": "string",
+        "enum": ["log", "vigil-harbor", "both"],
+        "default": "log"
+      },
+      "auditVerbosity": {
+        "type": "string",
+        "enum": ["minimal", "standard", "high", "maximum"],
+        "default": "standard"
+      },
+      "alertChannel": {
+        "type": "string",
+        "description": "Discord channel ID for alert notifications"
+      },
+      "exemptChannels": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      },
+      "exemptSenders": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": []
+      }
+    }
+  }
+}
