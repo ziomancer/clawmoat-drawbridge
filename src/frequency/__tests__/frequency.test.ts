@@ -547,4 +547,36 @@ describe("FrequencyTracker — edge cases", () => {
 
     vi.restoreAllMocks();
   });
+
+  // 33. thresholds getter returns defensive copy
+  it("thresholds getter returns defensive copy", () => {
+    const tracker = createTestTracker();
+    const t1 = tracker.thresholds;
+    const t2 = tracker.thresholds;
+
+    // Values match config
+    expect(t1).toEqual({ tier1: 15, tier2: 30, tier3: 50 });
+
+    // Each call returns a fresh object
+    expect(t1).not.toBe(t2);
+
+    // Mutating returned object doesn't corrupt tracker
+    t1.tier1 = 9999;
+    expect(tracker.thresholds.tier1).toBe(15);
+  });
+
+  // 34. getState returns deep copy of rollingFindings
+  it("getState returns deep copy of rollingFindings", () => {
+    const tracker = createTestTracker();
+    tracker.update("s1", ["drawbridge.structural.malformed_json"]);
+
+    const state1 = tracker.getState("s1");
+    expect(state1).not.toBeNull();
+    expect(state1!.rollingFindings).toBeDefined();
+
+    // Mutating the returned array doesn't affect internal state
+    state1!.rollingFindings!.push(999999);
+    const state2 = tracker.getState("s1");
+    expect(state2!.rollingFindings!.length).toBe(state1!.rollingFindings!.length - 1);
+  });
 });

@@ -126,10 +126,10 @@ export interface SanitizeConfig {
 }
 
 /** Default sanitize/redaction configuration */
-export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = {
+export const DEFAULT_SANITIZE_CONFIG: SanitizeConfig = Object.freeze({
   placeholder: "[REDACTED]",
   includeRuleId: false,
-};
+});
 
 /** Per-redaction detail for audit trail */
 export interface RedactionDetail {

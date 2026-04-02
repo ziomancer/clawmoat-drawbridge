@@ -4,7 +4,7 @@
 
 <p align="center">
   Session-aware content sanitization pipeline powered by <a href="https://github.com/darfaz/clawmoat">ClawMoat</a>.<br>
-  Standalone library — wire into any agent pipeline. 350 tests, security-audited.
+  Standalone library — wire into any agent pipeline. 420 tests, security-hardened.
 </p>
 
 ---
@@ -18,7 +18,7 @@ Every module is standalone. Use them individually or wire them together.
 ## Install
 
 ```bash
-npm i @vigil-harbor/clawmoat-drawbridge
+npm install @vigil-harbor/clawmoat-drawbridge clawmoat
 ```
 
 ## Modules
@@ -31,7 +31,7 @@ Wraps ClawMoat with threshold filtering, direction-aware scanning (inbound/outbo
 <summary>Usage</summary>
 
 ```ts
-import { DrawbridgeScanner } from "@ziomancer/clawmoat-drawbridge";
+import { DrawbridgeScanner } from "@vigil-harbor/clawmoat-drawbridge";
 
 const scanner = new DrawbridgeScanner({
   blockThreshold: "medium",
@@ -47,13 +47,13 @@ if (!result.safe) {
 
 ### Syntactic Pre-Filter
 
-Pure-function pattern matching — catches injection phrases, structural anomalies, encoding tricks. 16-rule frozen taxonomy. No model calls, sub-millisecond.
+Pure-function pattern matching — catches injection phrases, structural anomalies, encoding tricks. 18-rule frozen taxonomy with NFKC normalization, zero-width character stripping, and extended homoglyph detection. No model calls, sub-millisecond.
 
 <details>
 <summary>Usage</summary>
 
 ```ts
-import { PreFilter } from "@ziomancer/clawmoat-drawbridge";
+import { PreFilter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const filter = new PreFilter();
 const result = filter.run(content);
@@ -65,13 +65,13 @@ if (!result.pass) {
 
 ### Frequency Tracker
 
-Per-session exponential-decay suspicion scoring. Findings accumulate, scores decay over time. Three escalation tiers: forced deep inspection → enhanced scrutiny → session termination.
+Per-session exponential-decay suspicion scoring with rolling window counter. Findings accumulate, scores decay over time. Three escalation tiers: forced deep inspection → enhanced scrutiny → session termination. Rolling counter prevents low-and-slow evasion of exponential decay. Session creation rate-limited at capacity to prevent flood-eviction attacks.
 
 <details>
 <summary>Usage</summary>
 
 ```ts
-import { FrequencyTracker } from "@ziomancer/clawmoat-drawbridge";
+import { FrequencyTracker } from "@vigil-harbor/clawmoat-drawbridge";
 
 const tracker = new FrequencyTracker();
 const result = tracker.update(sessionId, scanResult.findings.map(f => f.ruleId));
@@ -110,7 +110,7 @@ Deployment-specific tuning. Five built-in profiles (general, customer-service, c
 <summary>Usage</summary>
 
 ```ts
-import { ProfileResolver, PreFilter, FrequencyTracker } from "@ziomancer/clawmoat-drawbridge";
+import { ProfileResolver, PreFilter, FrequencyTracker } from "@vigil-harbor/clawmoat-drawbridge";
 
 const profile = new ProfileResolver("admin");
 const filter = new PreFilter(profile.applySyntacticConfig());
@@ -127,7 +127,7 @@ Structured event emission gated by four verbosity tiers (minimal → standard �
 <summary>Usage</summary>
 
 ```ts
-import { AuditEmitter } from "@ziomancer/clawmoat-drawbridge";
+import { AuditEmitter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const audit = new AuditEmitter({
   verbosity: "standard",
@@ -138,13 +138,13 @@ const audit = new AuditEmitter({
 
 ### Alert Manager
 
-Evaluates audit events against configurable rules. Cross-session burst detection, frequency escalation alerts, scanner/pre-filter correlation. Tier 3 alerts cannot be disabled.
+Evaluates audit events against configurable rules. Cross-session burst detection, frequency escalation alerts, scanner/pre-filter correlation. Critical alerts exempt from rate limiting. Config validated at construction. Tier 3 alerts cannot be disabled.
 
 <details>
 <summary>Usage</summary>
 
 ```ts
-import { AlertManager, AuditEmitter } from "@ziomancer/clawmoat-drawbridge";
+import { AlertManager, AuditEmitter } from "@vigil-harbor/clawmoat-drawbridge";
 
 const alerts = new AlertManager({
   onAlert: (alert) => pagerduty.send(alert),
@@ -167,7 +167,7 @@ Validates MCP tool output against registered schemas with discriminated union su
 <summary>Usage</summary>
 
 ```ts
-import { SchemaValidator } from "@ziomancer/clawmoat-drawbridge";
+import { SchemaValidator } from "@vigil-harbor/clawmoat-drawbridge";
 
 const validator = new SchemaValidator({
   enabled: true,
@@ -200,13 +200,15 @@ Single `inspect()` call that orchestrates every stage: trust check, pre-filter, 
 - **Terminated session fast-path** — tier3 sessions are blocked immediately without re-inspection
 - **Profile-driven tuning** — profile applied at construction, tunes pre-filter and frequency tracker
 - **Trusted tool alerts** — `trustedToolSchemaFail` fires high-severity alerts when trusted servers emit malformed output
+- **Input normalization** — NFKC normalization, zero-width stripping, homoglyph mapping applied before pattern matching
+- **Validation hooks** — `validateSessionId` and `validateServerName` callbacks for transport-layer identity verification
 - **Module accessors** — `scannerModule`, `frequencyModule`, `resolvedProfile`, etc. for fine-grained control
 
 <details>
 <summary>Usage</summary>
 
 ```ts
-import { DrawbridgePipeline } from "@ziomancer/clawmoat-drawbridge";
+import { DrawbridgePipeline } from "@vigil-harbor/clawmoat-drawbridge";
 
 const pipeline = new DrawbridgePipeline({
   profile: "admin",
@@ -227,6 +229,9 @@ const pipeline = new DrawbridgePipeline({
   alerting: {
     onAlert: (alert) => sendToSlack(alert),
   },
+  // Transport-layer identity verification (recommended)
+  validateServerName: (name) => verifiedMcpServers.has(name),
+  validateSessionId: (id) => sessionStore.has(id),
 });
 
 const result = pipeline.inspect({
@@ -307,19 +312,23 @@ All modules are standalone — use individually or together. Context profiles tu
 | Module | Version | Tests | Status |
 |--------|---------|-------|--------|
 | Scanner | v0.1 | 20 | ✅ Implemented + audited |
-| Frequency Tracker | v0.2 | 32 | ✅ Implemented + audited |
-| Pre-Filter | v0.3 | 35 | ✅ Implemented + audited |
+| Frequency Tracker | v1.1 | 32 | ✅ Rolling window, eviction hardening |
+| Pre-Filter | v1.1 | 47 | ✅ NFKC normalization, 18-rule taxonomy |
+| Normalization | v1.1 | 29 | ✅ Zero-width, homoglyph, RTL detection |
 | Schema Validator | v1.1 | 17 | ✅ Implemented + hardened |
-| Profiles | v0.3 | 24 | ✅ Implemented + audited |
+| Profiles | v1.1 | 24 | ✅ Deep-frozen resolved profiles |
 | Sanitize | v1.1 | 38 | ✅ HMAC hashing, overlap merge |
-| Audit Emitter | v0.4 | 41 | ✅ Implemented + audited |
-| Alert Manager | v1.1 | 38 | ✅ trustedToolSchemaFail added |
-| Security Audit | — | 45 | ✅ 7 bugs found and fixed |
-| Pipeline | v1.1 | 60 | ✅ Schema, HMAC, hardening |
+| Audit Emitter | v1.1 | 41 | ✅ Config validation, verbosity gating |
+| Alert Manager | v1.1 | 38 | ✅ Critical exempt, error boundary |
+| Security Audit | — | 45 | ✅ 20 findings, all addressed |
+| Pipeline | v1.1 | 64 | ✅ Validation hooks, defensive copies |
+| Hardening Tests | — | 25 | ✅ Pass 3 coverage |
 
 ## Security
 
-Security audit completed across all modules. 7 vulnerabilities found and fixed in v1.0, plus v1.1 hardening:
+Adversarial security review completed across all modules. 20 findings identified and addressed across three hardening passes.
+
+### Original audit (v1.0)
 
 | ID | Severity | Description |
 |----|----------|-------------|
@@ -333,15 +342,38 @@ Security audit completed across all modules. 7 vulnerabilities found and fixed i
 
 ### v1.1 Hardening
 
-- **HMAC-SHA256 redaction hashing** — bare SHA-256 of short secrets is brute-forceable; replaced with keyed HMAC. No hash emitted without an explicit `hmacKey`.
-- **Prototype pollution guards** — all `in` operator usage in schema validation replaced with `Object.hasOwn()` to prevent prototype chain traversal.
-- **Schema key namespace validation** — colon-in-key guards, empty-component rejection, constructor-time empty-variant detection.
-- **Deep-cloned toolSchemas** — `structuredClone` per schema value prevents post-construction mutation via caller's retained reference.
-- **Double-violation prevention** — fields flagged as missing are skipped during type checking to avoid duplicate violations.
-- **Schema on hard-blocked content** — schema validation skipped for content already rejected by the two-pass gate.
-- **`safe` vs `schemaResult.pass`** — `PipelineResult.safe` reflects injection detection only; schema validity must be checked independently.
+**Schema & HMAC (pre-audit)**
+- HMAC-SHA256 redaction hashing (no bare SHA-256), prototype pollution guards, schema key namespace validation, deep-cloned toolSchemas, double-violation prevention, schema skipped on hard-blocked content, `safe` vs `schemaResult.pass` semantic separation
+
+**Pass 1 — Input normalization** (Findings #1-4)
+- NFKC normalization before all injection pattern matching
+- Zero-width character stripping with escalation when combined with injection patterns
+- Extended homoglyph map (Greek, Latin Extended)
+- RTL override detection
+
+**Pass 2 — Defensive copies & immutable exports** (Findings #11-13, #17)
+- Spread-copy config arrays in pipeline constructor
+- `deepFreeze` / `Object.freeze` on all exported constants
+- Frozen resolved profile properties
+
+**Pass 3 — Alerting & frequency hardening** (Findings #6-10, #15, #18-19)
+- Config validation at construction (audit verbosity, alert manager params)
+- Critical alerts exempt from rate limiting
+- `evaluate()` error boundary — never throws on malformed events
+- Rolling window counter prevents low-and-slow evasion of exponential decay
+- Session creation rate-limited at capacity; terminated sessions evicted first
+- `validateSessionId` / `validateServerName` hooks for transport-layer verification
 
 Tier 3 frequency alerts cannot be disabled — the constructor enforces `tier3Enabled: true` regardless of consumer config.
+
+### Security Considerations
+
+`sessionId` and `serverName` in `PipelineInput` are caller-provided and unvalidated by default:
+
+- **sessionId** must be derived from authenticated transport state (e.g., server-signed session token). If sourced from client input, attackers can poison other sessions' frequency scores. Configure `validateSessionId` for runtime enforcement.
+- **serverName** must be verified at the transport layer (e.g., mTLS, signed tokens). If sourced from message content, attackers can spoof trusted servers to bypass all inspection. Configure `validateServerName` for runtime enforcement.
+
+See `DrawbridgePipelineConfig` for the validation callback signatures.
 
 ## License
 
