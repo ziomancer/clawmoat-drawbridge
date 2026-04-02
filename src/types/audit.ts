@@ -49,12 +49,12 @@ export type AuditEventType =
 // Verbosity gating
 // ---------------------------------------------------------------------------
 
-export const VERBOSITY_RANK: Record<AuditVerbosity, number> = {
+export const VERBOSITY_RANK: Readonly<Record<AuditVerbosity, number>> = Object.freeze({
   minimal: 1,
   standard: 2,
   high: 3,
   maximum: 4,
-};
+});
 
 /**
  * Minimum verbosity required to emit each event type.

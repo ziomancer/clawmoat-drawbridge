@@ -46,8 +46,8 @@ export function handleMessageSending(
     }
 
     return PASS;
-  } catch {
-    // Fail-open
+  } catch (err) {
+    console.warn("[drawbridge:message_sending] Fail-open:", (err as Error).message ?? err);
     return PASS;
   }
 }

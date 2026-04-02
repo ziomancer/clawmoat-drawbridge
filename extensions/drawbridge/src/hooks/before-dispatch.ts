@@ -61,8 +61,8 @@ export function handleBeforeDispatch(
     }
 
     return PASS;
-  } catch {
-    // Fail-open
+  } catch (err) {
+    console.warn("[drawbridge:before_dispatch] Fail-open:", (err as Error).message ?? err);
     return PASS;
   }
 }

@@ -81,9 +81,9 @@ export class AlertManager {
     };
 
     // Validate config values (Finding #19)
-    if (!Number.isFinite(this.config.suppressionWindowMinutes) || this.config.suppressionWindowMinutes <= 0) {
+    if (!Number.isFinite(this.config.suppressionWindowMinutes) || this.config.suppressionWindowMinutes < 0) {
       throw new Error(
-        `AlertManager: suppressionWindowMinutes must be a positive finite number, ` +
+        `AlertManager: suppressionWindowMinutes must be a non-negative finite number, ` +
         `got ${this.config.suppressionWindowMinutes}`,
       );
     }

@@ -71,19 +71,17 @@ describe("config validation", () => {
 
   it("suppressionWindowMinutes: Infinity throws", () => {
     expect(() => new AlertManager({ suppressionWindowMinutes: Infinity })).toThrow(
-      /suppressionWindowMinutes must be a positive finite number/,
+      /suppressionWindowMinutes must be a non-negative finite number/,
     );
   });
 
-  it("suppressionWindowMinutes: 0 throws", () => {
-    expect(() => new AlertManager({ suppressionWindowMinutes: 0 })).toThrow(
-      /suppressionWindowMinutes must be a positive finite number/,
-    );
+  it("suppressionWindowMinutes: 0 means no suppression", () => {
+    expect(() => new AlertManager({ suppressionWindowMinutes: 0 })).not.toThrow();
   });
 
   it("suppressionWindowMinutes: -1 throws", () => {
     expect(() => new AlertManager({ suppressionWindowMinutes: -1 })).toThrow(
-      /suppressionWindowMinutes must be a positive finite number/,
+      /suppressionWindowMinutes must be a non-negative finite number/,
     );
   });
 
@@ -485,19 +483,19 @@ describe("validation callbacks", () => {
     const pipeline = new DrawbridgePipeline({
       engine: createMockClawMoat(),
       trustedServers: ["legit-server"],
-      validateServerName: (name) => name === "legit-server",
+      // Validator rejects the name even though it's in trustedServers
+      validateServerName: () => false,
     });
 
-    // Spoof a trusted server name that fails validation
     const result = pipeline.inspect({
       content: "hello world",
       source: "mcp",
-      serverName: "legit-server-fake",
+      serverName: "legit-server",
       toolName: "tool",
       sessionId: "s1",
     });
 
-    // Should NOT be trusted
+    // Should NOT be trusted — validator overrides trustedServers membership
     expect(result.trusted).toBe(false);
   });
 

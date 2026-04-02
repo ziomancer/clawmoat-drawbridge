@@ -140,9 +140,20 @@ export class DrawbridgePipeline {
     // 7. Trust config
     this._trustedServers = [...(cfg.trustedServers ?? [])];
 
-    // 7b. Validation hooks (Findings #8, #9)
-    this._validateSessionId = cfg.validateSessionId;
-    this._validateServerName = cfg.validateServerName;
+    // 7b. Validation hooks (Findings #8, #9) — wrapped so a faulty callback
+    // cannot crash inspect(). On error: return the safe default (false).
+    this._validateSessionId = cfg.validateSessionId
+      ? (sessionId: string): boolean => {
+          try { return cfg.validateSessionId!(sessionId); }
+          catch { return false; }
+        }
+      : undefined;
+    this._validateServerName = cfg.validateServerName
+      ? (serverName: string): boolean => {
+          try { return cfg.validateServerName!(serverName); }
+          catch { return false; }
+        }
+      : undefined;
 
     // 8. Audit emitter — pipeline is the event router (Option A)
     this._consumerOnEvent = cfg.audit?.onEvent;
@@ -328,7 +339,7 @@ export class DrawbridgePipeline {
     // from frequency/suspicion scoring.
     const schemaResult = skipScanner
       ? null
-      : this.runSchemaValidation(content, input, events, alerts, auditParams);
+      : this.runSchemaValidation(content, input, events, alerts, auditParams, false);
 
     // --- Stage 2: Scanner (ClawMoat) ---
     let scanResult: DrawbridgeScanResult | null = null;
@@ -570,7 +581,7 @@ export class DrawbridgePipeline {
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
   ): PipelineResult {
-    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams);
+    const schemaResult = this.runSchemaValidation(content, input, events, alerts, auditParams, true);
 
     this.routeEvent(
       this.auditor.emitScan({
@@ -741,6 +752,7 @@ export class DrawbridgePipeline {
     events: TypedAuditEvent[],
     alerts: AlertPayload[],
     auditParams: Record<string, unknown>,
+    callerTrusted: boolean,
   ): SchemaValidationResult | null {
     if (!this.schemaValidator || input.source !== "mcp") {
       return null;
@@ -780,7 +792,7 @@ export class DrawbridgePipeline {
       : parseOrFallback(content);
 
     const schemaResult = this.schemaValidator.validate(contentForSchema, input.serverName, input.toolName);
-    const trusted = this._trustedServers.includes(input.serverName);
+    const trusted = callerTrusted;
 
     this.routeEvent(
       this.auditor.emitSchema({

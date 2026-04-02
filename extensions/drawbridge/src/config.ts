@@ -63,19 +63,20 @@ export interface ResolvedConfig {
   exemptSenders: readonly string[];
 }
 
-export function resolveConfig(input?: DrawbridgePluginConfig): ResolvedConfig {
+export function resolveConfig(input?: DrawbridgePluginConfig): Readonly<ResolvedConfig> {
   const cfg = input ?? {};
-  return {
+  const freq = cfg.frequency
+    ? Object.freeze({
+        ...cfg.frequency,
+        weights: cfg.frequency.weights ? Object.freeze({ ...cfg.frequency.weights }) : undefined,
+        thresholds: cfg.frequency.thresholds ? Object.freeze({ ...cfg.frequency.thresholds }) : undefined,
+        memory: cfg.frequency.memory ? Object.freeze({ ...cfg.frequency.memory }) : undefined,
+      })
+    : undefined;
+  return Object.freeze({
     inboundProfile: cfg.inboundProfile ?? "general",
     outboundProfile: cfg.outboundProfile ?? "customer-service",
-    frequency: cfg.frequency
-      ? {
-          ...cfg.frequency,
-          weights: cfg.frequency.weights ? { ...cfg.frequency.weights } : undefined,
-          thresholds: cfg.frequency.thresholds ? { ...cfg.frequency.thresholds } : undefined,
-          memory: cfg.frequency.memory ? { ...cfg.frequency.memory } : undefined,
-        }
-      : undefined,
+    frequency: freq,
     blockThreshold: cfg.blockThreshold ?? "medium",
     direction: cfg.direction ?? "both",
     tier2Action: cfg.tier2Action ?? "warn",
@@ -86,8 +87,7 @@ export function resolveConfig(input?: DrawbridgePluginConfig): ResolvedConfig {
     auditSink: cfg.auditSink ?? "log",
     auditVerbosity: cfg.auditVerbosity ?? "standard",
     alertChannel: cfg.alertChannel,
-    // Defensive copies — frozen after init
     exemptChannels: Object.freeze([...(cfg.exemptChannels ?? [])]),
     exemptSenders: Object.freeze([...(cfg.exemptSenders ?? [])]),
-  };
+  });
 }

@@ -25,7 +25,7 @@ export function handleLlmOutput(
     if (!fullText) return;
 
     const truncated = fullText.length > MAX_CONTENT_LENGTH
-      ? fullText.slice(0, MAX_CONTENT_LENGTH) + "..."
+      ? fullText.slice(0, MAX_CONTENT_LENGTH - 3) + "..."
       : fullText;
 
     state.auditSink.emit({

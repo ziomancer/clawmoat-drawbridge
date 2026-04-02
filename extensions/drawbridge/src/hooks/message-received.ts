@@ -26,7 +26,7 @@ export function handleMessageReceived(
 
     const key = cacheKey(event.content, sessionId);
     cacheSet(state.cache, key, result);
-  } catch {
-    // Fail-open — scanning failure must never block message delivery
+  } catch (err) {
+    console.warn("[drawbridge:message_received] Fail-open:", (err as Error).message ?? err);
   }
 }

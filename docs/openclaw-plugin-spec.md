@@ -245,22 +245,33 @@ Drawbridge's `DrawbridgePipeline` accepts an injected `engine` prop, so the inte
 extensions/drawbridge/
 ├── openclaw.plugin.json
 ├── package.json
-├── index.ts                  # definePluginEntry + hook registration
+├── vitest.config.ts
 ├── src/
+│   ├── index.ts              # createDrawbridgePlugin + hook registration
 │   ├── pipeline-factory.ts   # Creates inbound/outbound pipeline instances
 │   ├── hooks/
 │   │   ├── message-received.ts
 │   │   ├── before-dispatch.ts
 │   │   ├── message-sending.ts
-│   │   └── llm-output.ts
-│   ├── session.ts            # Session key derivation + scan cache
+│   │   ├── llm-output.ts
+│   │   └── gateway-stop.ts
+│   ├── session.ts            # Session key derivation + exemption checks
 │   ├── audit-sink.ts         # Routes audit events to log / VH MCP
-│   └── config.ts             # Plugin config types + defaults
+│   ├── config.ts             # Plugin config types + defaults
+│   └── types/
+│       └── openclaw.ts       # OpenClaw hook event/context types
 └── __tests__/
+    ├── helpers.ts
     ├── inbound.test.ts
     ├── outbound.test.ts
     ├── escalation.test.ts
-    └── audit-routing.test.ts
+    ├── audit-routing.test.ts
+    ├── cache.test.ts
+    ├── config-safety.test.ts
+    ├── cross-direction.test.ts
+    ├── fail-open.test.ts
+    ├── llm-output.test.ts
+    └── adversarial.test.ts
 ```
 
 ---

@@ -4,7 +4,7 @@
 
 <p align="center">
   Session-aware content sanitization pipeline powered by <a href="https://github.com/darfaz/clawmoat">ClawMoat</a>.<br>
-  Standalone library — wire into any agent pipeline. 420 tests, security-hardened.
+  Standalone library — wire into any agent pipeline. 424 library tests + 68 plugin tests, security-hardened.
 </p>
 
 ---
@@ -47,7 +47,7 @@ if (!result.safe) {
 
 ### Syntactic Pre-Filter
 
-Pure-function pattern matching — catches injection phrases, structural anomalies, encoding tricks. 18-rule frozen taxonomy with NFKC normalization, zero-width character stripping, and extended homoglyph detection. No model calls, sub-millisecond.
+Pure-function pattern matching — catches injection phrases, structural anomalies, encoding tricks. 17-rule frozen taxonomy with NFKC normalization, zero-width character stripping, and extended homoglyph detection. No model calls, sub-millisecond.
 
 <details>
 <summary>Usage</summary>
@@ -312,8 +312,8 @@ All modules are standalone — use individually or together. Context profiles tu
 | Module | Version | Tests | Status |
 |--------|---------|-------|--------|
 | Scanner | v0.1 | 20 | ✅ Implemented + audited |
-| Frequency Tracker | v1.1 | 32 | ✅ Rolling window, eviction hardening |
-| Pre-Filter | v1.1 | 47 | ✅ NFKC normalization, 18-rule taxonomy |
+| Frequency Tracker | v1.1 | 34 | ✅ Rolling window, eviction hardening |
+| Pre-Filter | v1.1 | 47 | ✅ NFKC normalization, 17-rule taxonomy |
 | Normalization | v1.1 | 29 | ✅ Zero-width, homoglyph, RTL detection |
 | Schema Validator | v1.1 | 17 | ✅ Implemented + hardened |
 | Profiles | v1.1 | 24 | ✅ Deep-frozen resolved profiles |
@@ -321,8 +321,9 @@ All modules are standalone — use individually or together. Context profiles tu
 | Audit Emitter | v1.1 | 41 | ✅ Config validation, verbosity gating |
 | Alert Manager | v1.1 | 38 | ✅ Critical exempt, error boundary |
 | Security Audit | — | 45 | ✅ 20 findings, all addressed |
-| Pipeline | v1.1 | 64 | ✅ Validation hooks, defensive copies |
+| Pipeline | v1.1 | 62 | ✅ Validation hooks, defensive copies |
 | Hardening Tests | — | 25 | ✅ Pass 3 coverage |
+| OpenClaw Plugin | v1.0 | 69 | ✅ Hook-only, fail-open, scan cache |
 
 ## Security
 

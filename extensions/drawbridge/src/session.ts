@@ -2,6 +2,7 @@
  * Session key derivation and exemption checks.
  */
 
+import { randomUUID } from "node:crypto";
 import { sha256 } from "@vigil-harbor/clawmoat-drawbridge";
 import type { HookContext, BeforeDispatchContext } from "./types/openclaw.js";
 import type { ResolvedConfig } from "./config.js";
@@ -24,8 +25,9 @@ export function deriveSessionId(
   const identity = ctx.conversationId ?? ctx.accountId;
   if (identity) return `${channelId}:${identity}`;
 
-  // Ephemeral fallback — no cross-turn tracking
-  const ephemeralSeed = `${content ?? ""}${timestamp ?? Date.now()}`;
+  // Ephemeral fallback — no cross-turn tracking, high-entropy to avoid collisions
+  console.warn("[drawbridge] Ephemeral session ID — no stable identity available for frequency tracking");
+  const ephemeralSeed = `${content ?? ""}${timestamp ?? Date.now()}${randomUUID()}`;
   return `${channelId}:ephemeral:${sha256(ephemeralSeed)}`;
 }
 

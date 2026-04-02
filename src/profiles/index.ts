@@ -32,11 +32,13 @@ export class ProfileResolver {
       this.resolved = this.resolveCustom(profile);
     }
 
-    // Freeze — profile must not change after construction
-    Object.freeze(this.resolved);
+    // Deep-freeze — profile must not change after construction
+    Object.freeze(this.resolved.syntacticEmphasis.addRules);
+    Object.freeze(this.resolved.syntacticEmphasis.suppressRules);
     Object.freeze(this.resolved.syntacticEmphasis);
     Object.freeze(this.resolved.frequencyWeightOverrides);
     Object.freeze(this.resolved.frequencyThresholdOverrides);
+    Object.freeze(this.resolved);
   }
 
   /** Get the resolved profile */

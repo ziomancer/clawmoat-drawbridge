@@ -39,7 +39,6 @@ export const SYNTACTIC_RULES = Object.freeze({
   }),
   encodingRuleIds: Object.freeze({
     base64InText: "drawbridge.syntactic.encoding.base64-in-text",
-    nullByte: "drawbridge.syntactic.encoding.null-byte",
     invisibleChars: "drawbridge.syntactic.encoding.invisible-chars",
     homoglyphSubstitution: "drawbridge.syntactic.encoding.homoglyph-substitution",
     rtlOverride: "drawbridge.syntactic.encoding.rtl-override",
@@ -62,7 +61,6 @@ export const SYNTACTIC_RULE_TAXONOMY: ReadonlySet<string> = new Set([
   "drawbridge.syntactic.structural.excessive-depth",
   "drawbridge.syntactic.structural.binary-content",
   "drawbridge.syntactic.encoding.base64-in-text",
-  "drawbridge.syntactic.encoding.null-byte",
   "drawbridge.syntactic.encoding.homoglyph-substitution",
   "drawbridge.syntactic.encoding.invisible-chars",
   "drawbridge.syntactic.encoding.rtl-override",

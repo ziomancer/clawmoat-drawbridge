@@ -8,7 +8,7 @@ import type { PluginState } from "../pipeline-factory.js";
 export function handleGatewayStop(state: PluginState): void {
   try {
     state.teardown();
-  } catch {
-    // Best-effort cleanup
+  } catch (err) {
+    console.warn("[drawbridge:gateway_stop] Teardown error:", (err as Error).message ?? err);
   }
 }

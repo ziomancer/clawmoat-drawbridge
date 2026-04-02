@@ -132,9 +132,16 @@ describe("Audit routing", () => {
       expect(sink).toBeInstanceOf(CompositeSink);
     });
 
-    it("falls back to LogSink when VH ingest not provided", () => {
-      const sink = createAuditSink("vigil-harbor");
+    it("throws when vigil-harbor mode has no ingest callback", () => {
+      expect(() => createAuditSink("vigil-harbor")).toThrow(/requires a vhIngest callback/);
+    });
+
+    it("falls back to LogSink when 'both' mode has no ingest callback", () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const sink = createAuditSink("both");
       expect(sink).toBeInstanceOf(LogSink);
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 });
