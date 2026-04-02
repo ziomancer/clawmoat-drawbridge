@@ -2,6 +2,23 @@
 
 All notable changes to Drawbridge are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] — 2026-04-02
+
+### Fixed
+- Use optional chaining in catch blocks to handle null/undefined errors
+- Freeze shared `PASS` constants and `SYNTACTIC_RULE_TAXONOMY` to prevent mutation
+- Snapshot validator callbacks and `deriveSessionId` signature
+- Shallow config merge (now deep-merges nested config objects)
+- Widen prefilter perf test threshold for CI runners
+- Truncate long error messages in logs
+- Changelog tier 1 typo and finding count
+
+### Added
+- OpenClaw Drawbridge plugin with 68 tests (`extensions/drawbridge`)
+- Shared `FrequencyTracker` injection and thresholds getter
+- ClawMoat resolution error logging and cache-miss re-scan docs
+- CI release workflow for automated npm publishing via GitHub Releases
+
 ## [1.1.0] — 2026-03-28
 
 ### Security Hardening — Pass 1: Input Normalization
