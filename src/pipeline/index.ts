@@ -142,15 +142,17 @@ export class DrawbridgePipeline {
 
     // 7b. Validation hooks (Findings #8, #9) — wrapped so a faulty callback
     // cannot crash inspect(). On error: return the safe default (false).
-    this._validateSessionId = cfg.validateSessionId
+    const validateSessionId = cfg.validateSessionId;
+    const validateServerName = cfg.validateServerName;
+    this._validateSessionId = validateSessionId
       ? (sessionId: string): boolean => {
-          try { return cfg.validateSessionId!(sessionId); }
+          try { return validateSessionId(sessionId) === true; }
           catch { return false; }
         }
       : undefined;
-    this._validateServerName = cfg.validateServerName
+    this._validateServerName = validateServerName
       ? (serverName: string): boolean => {
-          try { return cfg.validateServerName!(serverName); }
+          try { return validateServerName(serverName) === true; }
           catch { return false; }
         }
       : undefined;

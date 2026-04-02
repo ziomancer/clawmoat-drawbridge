@@ -109,6 +109,20 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
 
 **Exemptions:** Intentionally bypassed. Forensic capture is universal regardless of channel/sender exemptions. Exemptions control scanning and blocking (hooks 3.1–3.3), not audit trail completeness.
 
+### 3.5 `gateway:stop` — Cleanup
+
+**When:** Gateway process is shutting down.
+
+**Event shape:** `void` (no payload)
+
+**Action:**
+1. Skip if the plugin was never initialized (lazy init never triggered)
+2. Call `FrequencyTracker.clear()` to release session state
+3. Call `DrawbridgePipeline.clear()` on both inbound and outbound instances
+4. Flush any pending audit events
+
+**Failure:** Cleanup errors are logged but never rethrown — shutdown must not hang.
+
 ---
 
 ## 4. Pipeline Configuration
@@ -177,7 +191,7 @@ Future: expose a `/drawbridge reset <sessionKey>` command to manually clear a te
 OpenClaw provides `sessionKey` in hook context (composed from channel + conversation + sender). This maps directly to Drawbridge's `sessionId`:
 
 ```ts
-function deriveSessionId(ctx: HookContext): string {
+function deriveSessionId(ctx: HookContext, content: string, timestamp: number): string {
   // sessionKey is already unique per conversation participant
   if (ctx.sessionKey) return ctx.sessionKey;
   if (ctx.conversationId ?? ctx.accountId) return `${ctx.channelId}:${ctx.conversationId ?? ctx.accountId}`;
