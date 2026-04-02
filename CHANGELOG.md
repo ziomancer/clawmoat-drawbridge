@@ -47,7 +47,7 @@ Fixes findings #6 (low-and-slow evasion), #7 (session eviction weaponization), #
 
 #### Added
 - **Config validation:** `AuditEmitter` rejects invalid verbosity strings; `AlertManager` validates `suppressionWindowMinutes`, rate limit values, and `recentContextMax` at construction
-- **Rolling window counter:** New `rollingWindowMs` and `rollingThreshold` config on `FrequencyConfig`. Tracks non-decaying finding count per session. Forces at least tier1 escalation when threshold met, preventing low-and-slow evasion of exponential decay
+- **Rolling window counter:** New `rollingWindowMs` and `rollingThreshold` config on `FrequencyConfig`. Tracks non-decaying finding count per session. Forces at least tier 1 escalation when threshold met, preventing low-and-slow evasion of exponential decay
 - **Session creation rate limiting:** New `maxNewSessionsPerMinute` on `FrequencyMemoryConfig`. Enforced when sessions are at capacity to prevent flood-eviction attacks
 - **Terminated-first eviction:** Session eviction now prefers terminated sessions over active ones
 - **Validation hooks:** `validateSessionId` and `validateServerName` callbacks on `DrawbridgePipelineConfig`. SessionId validation gates frequency tracking; serverName validation gates trust resolution

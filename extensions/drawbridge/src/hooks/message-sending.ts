@@ -8,7 +8,7 @@ import type { PluginState } from "../pipeline-factory.js";
 import { deriveSessionId, isExempt } from "../session.js";
 import type { MessageSendingEvent, HookContext, MessageSendingResult } from "../types/openclaw.js";
 
-const PASS: MessageSendingResult = {};
+const PASS: MessageSendingResult = Object.freeze({});
 
 export function handleMessageSending(
   state: PluginState,

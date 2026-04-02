@@ -9,7 +9,7 @@ import { cacheKey, cacheGet } from "../pipeline-factory.js";
 import { deriveSessionId, isExempt } from "../session.js";
 import type { BeforeDispatchEvent, BeforeDispatchContext, BeforeDispatchResult } from "../types/openclaw.js";
 
-const PASS: BeforeDispatchResult = { handled: false };
+const PASS: BeforeDispatchResult = Object.freeze({ handled: false });
 
 export function handleBeforeDispatch(
   state: PluginState,
