@@ -212,7 +212,7 @@ Drawbridge's `AlertManager` produces `AlertPayload` objects. The plugin routes t
 | Alert Severity | Action |
 |---------------|--------|
 | `info` | Log only |
-| `warning` | Log + optional Discord notification to admin channel |
+| `high` | Log + optional Discord notification to admin channel |
 | `critical` | Log + Discord notification + session terminated |
 
 Admin notification channel is configurable: `"alertChannel": "1234567890"`.

@@ -2,6 +2,10 @@
  * llm_output hook — forensic breadcrumb only.
  * Emits structured audit event with truncated content, no pipeline scan.
  * Fail-open.
+ *
+ * Intentionally skips exemption check: forensic capture is universal
+ * regardless of channel/sender exemptions. Exemptions control scanning
+ * and blocking, not audit trail completeness.
  */
 
 import { sha256 } from "@vigil-harbor/clawmoat-drawbridge";

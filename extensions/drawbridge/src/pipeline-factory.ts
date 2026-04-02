@@ -105,23 +105,30 @@ export async function initializePluginState(opts: InitOptions): Promise<PluginSt
   }
 
   // 2. Create shared FrequencyTracker
+  // Deep-merge nested objects to prevent partial overrides from dropping
+  // sibling keys (e.g. { thresholds: { tier1: 5 } } must not erase tier2/tier3).
+  const freq = config.frequency;
   const tracker = new FrequencyTracker({
-    enabled: true,
-    halfLifeMs: 60_000,
-    rollingWindowMs: 300_000,
-    rollingThreshold: 10,
+    enabled: freq?.enabled ?? true,
+    halfLifeMs: freq?.halfLifeMs ?? 60_000,
+    rollingWindowMs: freq?.rollingWindowMs ?? 300_000,
+    rollingThreshold: freq?.rollingThreshold ?? 10,
     weights: {
       "drawbridge.prompt_injection.*": 15,
       "drawbridge.credential.*": 10,
       "drawbridge.structural.*": 5,
+      ...freq?.weights,
     },
-    thresholds: { tier1: 15, tier2: 40, tier3: 80 },
+    thresholds: {
+      tier1: 15, tier2: 40, tier3: 80,
+      ...freq?.thresholds,
+    },
     memory: {
       maxSessions: 10_000,
       sessionTtlMs: 1_800_000,
       maxNewSessionsPerMinute: 100,
+      ...freq?.memory,
     },
-    ...config.frequency,
   });
 
   // 3. Create audit sink

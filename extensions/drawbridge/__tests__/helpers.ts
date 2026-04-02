@@ -86,6 +86,8 @@ export function createTestState(
   const tracker = new FrequencyTracker({
     enabled: true,
     halfLifeMs: 100,
+    rollingWindowMs: 60_000,
+    rollingThreshold: 10,
     weights: {
       "drawbridge.prompt_injection.*": 20,
       "drawbridge.credential.*": 10,
@@ -93,10 +95,9 @@ export function createTestState(
     },
     thresholds: { tier1: 15, tier2: 40, tier3: 80 },
     memory: {
-      rollingWindowMs: 60_000,
-      maxFindings: 100,
       maxSessions: 100,
       sessionTtlMs: 300_000,
+      maxNewSessionsPerMinute: 100,
     },
   });
 
