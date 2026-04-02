@@ -128,23 +128,24 @@ export class PreFilter {
     const flags: string[] = [];
     const fails = new Set<string>(); // ruleIds that cause pass=false
 
-    // ----- 0. Input normalization -----
+    // ----- 0. Payload size (before normalization — avoid processing oversized input) -----
+    const byteLength = Buffer.byteLength(content, "utf8");
+    if (byteLength > this.config.maxPayloadBytes) {
+      const ruleId = SYNTACTIC_RULES.structuralRuleIds.oversizedPayload;
+      ruleIds.push(ruleId);
+      flags.push(`Payload ${byteLength} bytes exceeds limit ${this.config.maxPayloadBytes}`);
+      fails.add(ruleId);
+      return { pass: false, flags, ruleIds };
+    }
+
+    // ----- 1. Input normalization -----
     // Strip invisibles, apply NFKC + homoglyph mapping. Pattern matching
     // below runs against `normalized`; structural checks use raw `content`.
     const norm = normalizeForDetection(content);
     const normalized = norm.normalized;
     let injectionMatchedOnNormalized = false;
 
-    // ----- 1. Structural checks -----
-
-    // Payload size
-    const byteLength = Buffer.byteLength(content, "utf8");
-    if (byteLength > this.config.maxPayloadBytes) {
-      const ruleId = SYNTACTIC_RULES.structuralRuleIds.oversizedPayload;
-      ruleIds.push(ruleId);
-      flags.push(`Payload ${byteLength} bytes exceeds limit ${this.config.maxPayloadBytes}`);
-      fails.add(ruleId); // structural always fails
-    }
+    // ----- 2. Structural checks -----
 
     // JSON depth
     try {
@@ -169,7 +170,7 @@ export class PreFilter {
       fails.add(ruleId); // structural always fails
     }
 
-    // ----- 2. Injection pattern scan -----
+    // ----- 3. Injection pattern scan -----
 
     for (const rule of SYNTACTIC_RULES.injectionPatterns) {
       if (rule.pattern.test(normalized)) {
@@ -201,7 +202,7 @@ export class PreFilter {
       // role-switch-only is ALWAYS flag-only, never fails
     }
 
-    // ----- 3. Encoding checks -----
+    // ----- 4. Encoding checks -----
 
     // Invisible characters (zero-width, null bytes, bidi controls)
     if (norm.invisibleCharsStripped > 0) {
@@ -241,7 +242,7 @@ export class PreFilter {
       // encoding = flag only
     }
 
-    // ----- 4. Compute pass -----
+    // ----- 5. Compute pass -----
     // Structural rules cannot be suppressed. Injection rules respect suppressRules.
     // Encoding rules and role-switch-only are always flag-only.
 

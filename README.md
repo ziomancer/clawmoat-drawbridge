@@ -4,7 +4,7 @@
 
 <p align="center">
   Session-aware content sanitization pipeline powered by <a href="https://github.com/darfaz/clawmoat">ClawMoat</a>.<br>
-  Standalone library — wire into any agent pipeline. 424 library tests + 68 plugin tests, security-hardened.
+  Standalone library — wire into any agent pipeline. 424 library tests + 69 plugin tests, security-hardened.
 </p>
 
 ---
@@ -202,7 +202,7 @@ Single `inspect()` call that orchestrates every stage: trust check, pre-filter, 
 - **Trusted tool alerts** — `trustedToolSchemaFail` fires high-severity alerts when trusted servers emit malformed output
 - **Input normalization** — NFKC normalization, zero-width stripping, homoglyph mapping applied before pattern matching
 - **Validation hooks** — `validateSessionId` and `validateServerName` callbacks for transport-layer identity verification
-- **Module accessors** — `scannerModule`, `frequencyModule`, `resolvedProfile`, etc. for fine-grained control
+- **Module accessors** — `resolvedProfile`, `getSessionState()`, `getAuditStats()`, `getAlertStats()`, `resetSession()`, `clear()`
 
 <details>
 <summary>Usage</summary>

@@ -1070,7 +1070,7 @@ describe("DrawbridgePipeline", () => {
       expect(schemaEvents).toHaveLength(0);
     });
 
-    it("39. MCP input, no serverName → schema_fail with schema.invalid-key", () => {
+    it("39. MCP input, no serverName → schema skipped (null)", () => {
       const { pipeline } = createTestPipeline({
         schema: { enabled: true, toolSchemas: { "my-server:my-tool": toolSchema } },
       });
@@ -1079,12 +1079,10 @@ describe("DrawbridgePipeline", () => {
         content: { result: "ok" },
         source: "mcp",
         sessionId: "s1",
-        // no serverName
+        // no serverName — schema validation skipped entirely
       });
 
-      expect(result.schemaResult).not.toBeNull();
-      expect(result.schemaResult!.pass).toBe(false);
-      expect(result.schemaResult!.ruleIds).toContain("schema.invalid-key");
+      expect(result.schemaResult).toBeNull();
     });
 
     it("40. schema fail → ruleIds excluded from frequency tracker", () => {

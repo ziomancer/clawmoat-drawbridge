@@ -67,7 +67,7 @@ Calvin (Qwen3.5-35b-a3b) runs on a local machine with tool access (read/write/ex
 
 **Action (precedence order — evaluated top to bottom, first match wins):**
 1. Check session termination first: if `tracker.getState(sessionId)?.terminated`, return `{ handled: true, text: "<session terminated message>" }` immediately — no scan needed
-2. Read cached scan result from 3.1 (keyed by `sha256(content + "\0" + sessionId)`) or re-scan on cache miss
+2. Read the cached scan result from 3.1 (keyed by `sha256(content + "\0" + sessionId)`) or re-scan on cache miss
 3. If `result.terminated === true` (tier3 reached during this scan): return `{ handled: true, text: "<session terminated message>" }`
 4. If `result.safe === false`: return `{ handled: true, text: "<configurable rejection message>" }` — message never reaches the agent
 5. If `result.escalationTier === "tier2"`: optionally block (configurable: `tier2Action: "warn" | "block"`)
@@ -179,11 +179,15 @@ OpenClaw provides `sessionKey` in hook context (composed from channel + conversa
 ```ts
 function deriveSessionId(ctx: HookContext): string {
   // sessionKey is already unique per conversation participant
-  return ctx.sessionKey ?? `${ctx.channelId}:${ctx.conversationId ?? ctx.accountId ?? "anon"}`;
+  if (ctx.sessionKey) return ctx.sessionKey;
+  if (ctx.conversationId ?? ctx.accountId) return `${ctx.channelId}:${ctx.conversationId ?? ctx.accountId}`;
+  // Ephemeral fallback — SHA-256(content + timestamp + randomUUID()) for high-entropy isolation
+  return `${ctx.channelId}:ephemeral:${sha256(content + timestamp + randomUUID())}`;
 }
 ```
+See `session.ts` for the full implementation.
 
-**Security note:** `sessionKey` comes from OpenClaw's authenticated dispatch — the sender is already verified by the channel plugin (Discord OAuth, etc). No additional `validateSessionId` callback needed.
+**Security note:** `sessionKey` comes from OpenClaw's authenticated dispatch — the sender is already verified by the channel plugin (Discord OAuth, etc). No additional `validateSessionId` callback needed. The ephemeral fallback disables cross-turn frequency tracking (by design — can't track escalation without a stable identity).
 
 ---
 
