@@ -454,7 +454,7 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
 
       const key = `${ctx.sessionKey}::${event.toolName}`;
 
-      if (event.error !== undefined && event.error !== null) {
+      if (event.error !== undefined) {
         // Error path — increment counter (synchronous-first write)
         const existing = attemptMap.get(key);
         attemptMap.set(key, {
@@ -533,6 +533,15 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
       // Resolve template
       const enrichment = resolveTemplate(toolName, category, severity, attempt, errorText, lastParams);
 
+      // Truncated text at MAX_ATTEMPTS: severity stays "recoverable" (can't classify
+      // truncated text reliably), but warn the LLM that the circuit breaker will
+      // block the next invocation.
+      if (isTruncated && attempt >= MAX_ATTEMPTS) {
+        enrichment.text = truncate(
+          enrichment.text + ` WARNING: This is attempt ${attempt} of ${MAX_ATTEMPTS}. The next invocation of ${toolName} will be blocked.`,
+        );
+      }
+
       // Build enriched message — additive to content, merge details
       const msg = event.message;
       const existingContent = msg.content;
@@ -603,11 +612,14 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
   function handleSessionCleanup(sessionKey: string): void {
     try {
       const prefix = `${sessionKey}::`;
+      // Collect keys before deleting — avoids mutation during iteration.
+      // ES6 Map spec guarantees delete-during-keys() is safe, but collecting
+      // first is unambiguous and the set is bounded at 13 remediation tools.
+      const toDelete: string[] = [];
       for (const key of attemptMap.keys()) {
-        if (key.startsWith(prefix)) {
-          attemptMap.delete(key);
-        }
+        if (key.startsWith(prefix)) toDelete.push(key);
       }
+      for (const key of toDelete) attemptMap.delete(key);
     } catch {
       // Fail-open — swallow
     }

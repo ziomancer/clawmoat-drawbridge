@@ -897,4 +897,33 @@ describe("truncation detection", () => {
     const details = (result!.message.details as Record<string, unknown>).enricher as Record<string, unknown>;
     expect(details.severity).toBe("recoverable");
   });
+
+  it("warns about imminent block when truncated AND at MAX_ATTEMPTS", () => {
+    const { handleAfterToolCall, handleToolResultPersist } = enricher._handlers;
+    const truncatedError = `timeout something${GUARD_TRUNCATION_SUFFIX}`;
+
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      handleAfterToolCall(
+        { toolName: "memory_search", error: truncatedError },
+        { sessionKey: "trunc-max" },
+      );
+    }
+
+    const result = handleToolResultPersist(
+      {
+        message: { isError: true, content: [{ type: "text", text: truncatedError }] },
+        isSynthetic: false,
+      },
+      { sessionKey: "trunc-max", toolName: "memory_search" },
+    );
+
+    expect(result).toBeDefined();
+    const details = (result!.message.details as Record<string, unknown>).enricher as Record<string, unknown>;
+    // Severity stays recoverable (can't classify truncated text)
+    expect(details.severity).toBe("recoverable");
+    // But enrichment text warns about the imminent block
+    const content = result!.message.content as Array<{ type: string; text: string }>;
+    const enrichmentText = content[content.length - 1]!.text;
+    expect(enrichmentText).toContain("will be blocked");
+  });
 });
