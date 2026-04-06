@@ -18,6 +18,7 @@ import { handleBeforeDispatch } from "./hooks/before-dispatch.js";
 import { handleMessageSending } from "./hooks/message-sending.js";
 import { handleLlmOutput } from "./hooks/llm-output.js";
 import { handleGatewayStop } from "./hooks/gateway-stop.js";
+import { createToolErrorEnricher } from "./hooks/tool-error-enricher.js";
 import type { VigilHarborIngestFn, AlertNotifyFn } from "./audit-sink.js";
 
 export type { DrawbridgePluginConfig } from "./config.js";
@@ -66,7 +67,7 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
       registerHook: (
         event: string,
         handler: (...args: unknown[]) => unknown,
-        opts?: { name?: string },
+        opts?: { name?: string; priority?: number },
       ) => void;
     }) {
       api.registerHook(
@@ -136,6 +137,10 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
         },
         { name: "drawbridge:gateway_stop" },
       );
+
+      // Tool error enricher — independent of PluginState (no async init needed)
+      const enricher = createToolErrorEnricher();
+      enricher.registerHooks(api);
     },
   };
 }
