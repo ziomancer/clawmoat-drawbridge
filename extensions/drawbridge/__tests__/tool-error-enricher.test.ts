@@ -68,6 +68,8 @@ describe("classifyErrorCategory", () => {
     ["forbidden resource", "auth_failure"],
     ["auth token expired", "auth_failure"],
     ["invalid credential", "auth_failure"],
+    ["authentication failed", "auth_failure"],
+    ["failed to authenticate with server", "auth_failure"],
   ] as const)("detects auth_failure: %s", (input, expected) => {
     expect(classifyErrorCategory(input)).toBe(expected);
   });
@@ -139,11 +141,10 @@ describe("classifySeverity", () => {
     expect(classifySeverity("rate_limit", 1, true)).toBe("recoverable");
   });
 
-  it("returns terminal for truncated input at MAX_ATTEMPTS (attempt check first)", () => {
-    // isTruncated check runs before attempt check per the spec classifier order:
-    // 1. isTruncated → recoverable  2. attemptCount >= MAX → terminal
-    // But actually per the code: isTruncated is checked first, so it returns recoverable
-    // This is the spec's intent — can't reliably classify truncated text
+  it("returns recoverable for truncated input even at MAX_ATTEMPTS", () => {
+    // Spec classifier order: isTruncated is checked before attemptCount.
+    // Truncated text at MAX_ATTEMPTS still returns "recoverable" — can't reliably classify.
+    // The before_tool_call circuit breaker still blocks (reads Map, not severity).
     expect(classifySeverity("timeout", MAX_ATTEMPTS, true)).toBe("recoverable");
   });
 

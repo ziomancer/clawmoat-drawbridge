@@ -172,7 +172,7 @@ export function redactParams(params: Record<string, unknown>): string {
 const CATEGORY_PATTERNS: ReadonlyArray<[ErrorCategory, RegExp]> = [
   ["timeout", /timeout|timed?\s*out|etimedout|deadline\s*exceeded/i],
   ["rate_limit", /429|rate\s*limit|too\s*many\s*requests|throttle/i],
-  ["auth_failure", /401|403|unauthorized|forbidden|(?<![a-z])auth(?![a-z])|credential/i],
+  ["auth_failure", /401|403|unauthorized|forbidden|auth|credential/i],
   ["server_unreachable", /econnrefused|enotfound|ehostunreach|network\s*error|connection\s*refused/i],
   ["validation", /invalid|required|missing|must\s*be|must\s*have|schema|expected/i],
 ];
@@ -441,8 +441,8 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
 
   // -----------------------------------------------------------------------
   // after_tool_call — increment/reset counter, stash params
-  // CRITICAL: Map.set() MUST be the FIRST operation — synchronous-write invariant.
-  // Do NOT add any await before the Map.set(). See module docstring.
+  // CRITICAL: Map.set() MUST execute before any await — synchronous-write invariant.
+  // The early returns above are safe: tool_result_persist bails on the same guards.
   // -----------------------------------------------------------------------
   function handleAfterToolCall(
     event: AfterToolCallEvent,
