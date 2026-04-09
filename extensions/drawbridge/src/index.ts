@@ -144,3 +144,6 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
     },
   };
 }
+
+// Default export for OpenClaw plugin loader
+export default createDrawbridgePlugin();
