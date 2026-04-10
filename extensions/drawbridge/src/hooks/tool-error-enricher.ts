@@ -130,10 +130,26 @@ const UTILITY_TOOLS = new Set([
 
 type ToolCategory = "retrieval" | "mutation" | "utility";
 
+/**
+ * Strip MCP server prefix from tool names.
+ * OpenClaw prefixes MCP tools with the server name: "vigil-harbor__memory_search".
+ * Returns the unprefixed name if it matches a remediation tool, otherwise the original.
+ */
+export function normalizeToolName(toolName: string): string {
+  if (REMEDIATION_TOOLS.has(toolName)) return toolName;
+  const sep = toolName.lastIndexOf("__");
+  if (sep >= 0) {
+    const unprefixed = toolName.slice(sep + 2);
+    if (REMEDIATION_TOOLS.has(unprefixed)) return unprefixed;
+  }
+  return toolName;
+}
+
 function getToolCategory(toolName: string): ToolCategory | undefined {
-  if (RETRIEVAL_TOOLS.has(toolName)) return "retrieval";
-  if (MUTATION_TOOLS.has(toolName)) return "mutation";
-  if (UTILITY_TOOLS.has(toolName)) return "utility";
+  const normalized = normalizeToolName(toolName);
+  if (RETRIEVAL_TOOLS.has(normalized)) return "retrieval";
+  if (MUTATION_TOOLS.has(normalized)) return "mutation";
+  if (UTILITY_TOOLS.has(normalized)) return "utility";
   return undefined;
 }
 
@@ -173,7 +189,7 @@ const CATEGORY_PATTERNS: ReadonlyArray<[ErrorCategory, RegExp]> = [
   ["timeout", /timeout|timed?\s*out|etimedout|deadline\s*exceeded/i],
   ["rate_limit", /429|rate\s*limit|too\s*many\s*requests|throttle/i],
   ["auth_failure", /401|403|unauthorized|forbidden|auth|credential/i],
-  ["server_unreachable", /econnrefused|enotfound|ehostunreach|network\s*error|connection\s*refused/i],
+  ["server_unreachable", /econnrefused|enotfound|eai_again|ehostunreach|network\s*error|connection\s*refused|fetch\s*failed/i],
   ["validation", /invalid|required|missing|must\s*be|must\s*have|schema|expected/i],
 ];
 
@@ -411,10 +427,10 @@ export function extractToolNameFromMessage(message: Record<string, unknown>): st
 
 export interface ToolErrorEnricher {
   registerHooks(api: {
-    registerHook: (
-      event: string,
+    on: (
+      hookName: string,
       handler: (...args: unknown[]) => unknown,
-      opts?: { name?: string; priority?: number },
+      opts?: { priority?: number },
     ) => void;
   }): void;
 
@@ -450,9 +466,10 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
   ): void {
     try {
       if (!ctx.sessionKey) return;
-      if (!REMEDIATION_TOOLS.has(event.toolName)) return;
+      const toolName = normalizeToolName(event.toolName);
+      if (!REMEDIATION_TOOLS.has(toolName)) return;
 
-      const key = `${ctx.sessionKey}::${event.toolName}`;
+      const key = `${ctx.sessionKey}::${toolName}`;
 
       if (event.error !== undefined) {
         // Error path — increment counter (synchronous-first write)
@@ -489,23 +506,55 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
       // Guard: skip synthetic results
       if (event.isSynthetic === true) return undefined;
 
-      // Guard: skip non-errors
-      const isError = (event.message as { isError?: boolean }).isError === true;
-      if (!isError) return undefined;
+      // Guard: skip non-errors — three detection layers:
+      // 1. isError flag (standard MCP protocol errors)
+      // 2. details.status === "error" (OpenClaw transport failure wrapping)
+      // 3. Content starts with "Error:" (MCP servers returning app errors as content)
+      const isErrorFlag = (event.message as { isError?: boolean }).isError === true;
+      const msgDetails = (event.message.details ?? {}) as Record<string, unknown>;
+      const detailsError = msgDetails.status === "error";
+      let contentError = false;
+      if (!isErrorFlag && !detailsError) {
+        const raw = event.message.content;
+        let lead = "";
+        if (typeof raw === "string") {
+          lead = raw;
+        } else if (Array.isArray(raw) && raw.length > 0) {
+          const first = raw[0] as Record<string, unknown>;
+          if (typeof first?.text === "string") lead = first.text;
+        }
+        contentError = lead.startsWith("Error:");
+      }
+      if (!isErrorFlag && !detailsError && !contentError) return undefined;
 
       // Guard: skip when sessionKey is undefined
       if (!ctx.sessionKey) return undefined;
 
-      // Resolve tool name (from ctx, then from message body)
-      const toolName = ctx.toolName ?? extractToolNameFromMessage(event.message);
-      if (!toolName) return undefined;
+      // Resolve tool name (from ctx, then from message body), strip MCP prefix
+      const rawToolName = ctx.toolName ?? extractToolNameFromMessage(event.message);
+      if (!rawToolName) return undefined;
+      const toolName = normalizeToolName(rawToolName);
 
       // Guard: skip non-remediation-map tools
       if (!REMEDIATION_TOOLS.has(toolName)) return undefined;
 
       // Read attempt state
       const key = `${ctx.sessionKey}::${toolName}`;
-      const entry = attemptMap.get(key);
+      let entry = attemptMap.get(key);
+
+      // Compensate for after_tool_call missing the error — when OpenClaw
+      // wraps MCP failures as content (isError: false), event.error is
+      // undefined so after_tool_call doesn't increment the counter.
+      if ((detailsError || contentError) && (!entry || entry.attempts === 0)) {
+        attemptMap.set(key, {
+          attempts: (entry?.attempts ?? 0) + 1,
+          lastParams: entry?.lastParams ?? {},
+          lastError: typeof msgDetails.error === "string" ? msgDetails.error : "",
+          lastTimestamp: Date.now(),
+        });
+        entry = attemptMap.get(key);
+      }
+
       const attempt = entry?.attempts ?? 1;
       const lastParams = entry?.lastParams ?? {};
 
@@ -521,6 +570,13 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
           )
           .map((b) => b.text);
         errorText = texts.join(" ");
+      }
+
+      // Prefer details.error for cleaner text when content is a JSON wrapper
+      if (typeof msgDetails.error === "string" && msgDetails.error) {
+        if (!errorText || errorText.startsWith("{")) {
+          errorText = msgDetails.error;
+        }
       }
 
       // Truncation detection
@@ -583,18 +639,19 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
   ): BeforeToolCallResult {
     try {
       if (!ctx.sessionKey) return {};
-      if (!REMEDIATION_TOOLS.has(event.toolName)) return {};
+      const toolName = normalizeToolName(event.toolName);
+      if (!REMEDIATION_TOOLS.has(toolName)) return {};
 
-      const key = `${ctx.sessionKey}::${event.toolName}`;
+      const key = `${ctx.sessionKey}::${toolName}`;
       const entry = attemptMap.get(key);
       if (!entry || entry.attempts < MAX_ATTEMPTS) return {};
 
       return {
         block: true,
         blockReason:
-          `${event.toolName} has failed ${entry.attempts} consecutive times ` +
+          `${toolName} has failed ${entry.attempts} consecutive times ` +
           `(${classifyErrorCategory(entry.lastError)}). ` +
-          `Inform the user that ${event.toolName} is currently unavailable and ` +
+          `Inform the user that ${toolName} is currently unavailable and ` +
           `suggest checking the MCP server or network connectivity.`,
       };
     } catch {
@@ -627,7 +684,7 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
 
   return {
     registerHooks(api) {
-      api.registerHook(
+      api.on(
         "after_tool_call",
         (event: unknown, ctx: unknown) => {
           handleAfterToolCall(
@@ -635,10 +692,9 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
             ctx as AfterToolCallContext,
           );
         },
-        { name: "drawbridge:after_tool_call" },
       );
 
-      api.registerHook(
+      api.on(
         "tool_result_persist",
         (event: unknown, ctx: unknown) => {
           return handleToolResultPersist(
@@ -646,10 +702,10 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
             ctx as ToolResultPersistContext,
           );
         },
-        { name: "drawbridge:tool_result_persist", priority: ENRICHER_PRIORITY },
+        { priority: ENRICHER_PRIORITY },
       );
 
-      api.registerHook(
+      api.on(
         "before_tool_call",
         (event: unknown, ctx: unknown) => {
           return handleBeforeToolCall(
@@ -657,10 +713,9 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
             ctx as BeforeToolCallContext,
           );
         },
-        { name: "drawbridge:before_tool_call" },
       );
 
-      api.registerHook(
+      api.on(
         "session_end",
         (event: unknown, ctx: unknown) => {
           const sessionKey =
@@ -668,10 +723,9 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
             (ctx as SessionLifecycleContext)?.sessionKey;
           if (sessionKey) handleSessionCleanup(sessionKey);
         },
-        { name: "drawbridge:session_end_enricher" },
       );
 
-      api.registerHook(
+      api.on(
         "before_reset",
         (event: unknown, ctx: unknown) => {
           const sessionKey =
@@ -679,7 +733,6 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
             (ctx as SessionLifecycleContext)?.sessionKey;
           if (sessionKey) handleSessionCleanup(sessionKey);
         },
-        { name: "drawbridge:before_reset_enricher" },
       );
     },
 

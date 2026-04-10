@@ -13,6 +13,7 @@ import {
   classifySeverity,
   redactParams,
   extractToolNameFromMessage,
+  normalizeToolName,
   GUARD_TRUNCATION_SUFFIX,
   MAX_ATTEMPTS,
   MAX_ENRICHMENT_CHARS,
@@ -77,9 +78,11 @@ describe("classifyErrorCategory", () => {
   it.each([
     ["ECONNREFUSED", "server_unreachable"],
     ["ENOTFOUND", "server_unreachable"],
+    ["getaddrinfo ENOTFOUND postgres", "server_unreachable"],
     ["EHOSTUNREACH", "server_unreachable"],
     ["network error occurred", "server_unreachable"],
     ["connection refused", "server_unreachable"],
+    ["fetch failed", "server_unreachable"],
   ] as const)("detects server_unreachable: %s", (input, expected) => {
     expect(classifyErrorCategory(input)).toBe(expected);
   });
@@ -431,7 +434,7 @@ describe("after_tool_call counter", () => {
 // ===========================================================================
 
 describe("tool_result_persist enrichment", () => {
-  it("skips when isError is false", () => {
+  it("skips when isError is false and no details.status error", () => {
     const result = enricher._handlers.handleToolResultPersist(
       makeToolResultPersistEvent({
         message: { isError: false, content: [{ type: "text", text: "success" }] },
@@ -439,6 +442,76 @@ describe("tool_result_persist enrichment", () => {
       makeToolResultPersistCtx(),
     );
     expect(result).toBeUndefined();
+  });
+
+  it("enriches when isError is false but details.status is 'error' (OpenClaw MCP wrapping)", () => {
+    const result = enricher._handlers.handleToolResultPersist(
+      makeToolResultPersistEvent({
+        message: {
+          isError: false,
+          content: [{ type: "text", text: '{"status": "error", "tool": "vigil-harbor__memory_search", "error": "fetch failed"}' }],
+          details: { status: "error", tool: "vigil-harbor__memory_search", error: "fetch failed" },
+        },
+      }),
+      makeToolResultPersistCtx(),
+    );
+    expect(result).toBeDefined();
+    const content = result!.message.content as Array<{ type: string; text: string }>;
+    // Enrichment appended
+    expect(content.length).toBe(2);
+    // Uses details.error for classification (cleaner than JSON content)
+    expect(content[1]!.text).toContain("SERVER UNREACHABLE");
+  });
+
+  it("enriches when content starts with 'Error:' (MCP app-level error as content)", () => {
+    const result = enricher._handlers.handleToolResultPersist(
+      makeToolResultPersistEvent({
+        message: {
+          isError: false,
+          content: [{ type: "text", text: 'Error: search failed\nDetails: getaddrinfo ENOTFOUND postgres\nQuery: "test"\nSuggestion: verify container is running' }],
+          details: { mcpServer: "vigil-harbor", mcpTool: "memory_search" },
+        },
+      }),
+      makeToolResultPersistCtx(),
+    );
+    expect(result).toBeDefined();
+    const content = result!.message.content as Array<{ type: string; text: string }>;
+    expect(content.length).toBe(2);
+    // ENOTFOUND classified as server_unreachable
+    expect(content[1]!.text).toContain("SERVER UNREACHABLE");
+  });
+
+  it("does NOT trigger content detection on successful results containing 'error' mid-text", () => {
+    const result = enricher._handlers.handleToolResultPersist(
+      makeToolResultPersistEvent({
+        message: {
+          isError: false,
+          content: [{ type: "text", text: "Found 3 records. No errors detected in the dataset." }],
+          details: { mcpServer: "vigil-harbor", mcpTool: "memory_search" },
+        },
+      }),
+      makeToolResultPersistCtx(),
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("compensates attempt counter when after_tool_call missed the error", () => {
+    // No prior after_tool_call — counter is unset
+    expect(enricher._attemptMap.size).toBe(0);
+
+    enricher._handlers.handleToolResultPersist(
+      makeToolResultPersistEvent({
+        message: {
+          isError: false,
+          content: [{ type: "text", text: '{"status": "error", "error": "fetch failed"}' }],
+          details: { status: "error", error: "fetch failed" },
+        },
+      }),
+      makeToolResultPersistCtx(),
+    );
+
+    // Counter should have been compensated to 1
+    expect(enricher._attemptMap.get("test-session-key::memory_search")?.attempts).toBe(1);
   });
 
   it("skips when isSynthetic is true", () => {
@@ -846,6 +919,83 @@ describe("integration: full lifecycle", () => {
     // Acknowledged: the circuit tripped after the 3rd counter increment,
     // even though only 2 errors may be in the transcript. This is safer
     // than tripping one attempt late.
+  });
+});
+
+// ===========================================================================
+// Tool name normalization (MCP server prefix stripping)
+// ===========================================================================
+
+describe("normalizeToolName", () => {
+  it("returns unprefixed name as-is", () => {
+    expect(normalizeToolName("memory_search")).toBe("memory_search");
+  });
+
+  it("strips MCP server prefix", () => {
+    expect(normalizeToolName("vigil-harbor__memory_search")).toBe("memory_search");
+    expect(normalizeToolName("vigil-harbor__memory_status")).toBe("memory_status");
+    expect(normalizeToolName("vigil-harbor__memory_ingest")).toBe("memory_ingest");
+  });
+
+  it("returns original if unprefixed name is not in remediation set", () => {
+    expect(normalizeToolName("vigil-harbor__some_other_tool")).toBe("vigil-harbor__some_other_tool");
+  });
+
+  it("returns original for non-prefixed unknown tools", () => {
+    expect(normalizeToolName("some_other_tool")).toBe("some_other_tool");
+  });
+});
+
+// ===========================================================================
+// Prefixed tool names (live OpenClaw MCP format)
+// ===========================================================================
+
+describe("prefixed tool names", () => {
+  it("after_tool_call increments counter for prefixed tool name", () => {
+    enricher._handlers.handleAfterToolCall(
+      { toolName: "vigil-harbor__memory_search", error: "fetch failed" },
+      { sessionKey: "prefix-test" },
+    );
+    // Stored under normalized key
+    expect(enricher._attemptMap.get("prefix-test::memory_search")?.attempts).toBe(1);
+  });
+
+  it("tool_result_persist enriches prefixed tool errors", () => {
+    enricher._handlers.handleAfterToolCall(
+      { toolName: "vigil-harbor__memory_search", error: "fetch failed" },
+      { sessionKey: "prefix-test" },
+    );
+
+    const result = enricher._handlers.handleToolResultPersist(
+      makeToolResultPersistEvent({
+        message: {
+          isError: false,
+          content: [{ type: "text", text: 'Error: search failed\nDetails: getaddrinfo ENOTFOUND postgres' }],
+          details: { mcpServer: "vigil-harbor", mcpTool: "memory_search" },
+        },
+      }),
+      { sessionKey: "prefix-test", toolName: "vigil-harbor__memory_search" },
+    );
+
+    expect(result).toBeDefined();
+    const content = result!.message.content as Array<{ type: string; text: string }>;
+    expect(content.length).toBe(2);
+    expect(content[1]!.text).toContain("SERVER UNREACHABLE");
+  });
+
+  it("before_tool_call blocks prefixed tool after MAX_ATTEMPTS", () => {
+    const ctx = { sessionKey: "prefix-block" };
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      enricher._handlers.handleAfterToolCall(
+        { toolName: "vigil-harbor__memory_search", error: "timeout" },
+        ctx,
+      );
+    }
+    const result = enricher._handlers.handleBeforeToolCall(
+      { toolName: "vigil-harbor__memory_search" },
+      ctx,
+    );
+    expect(result.block).toBe(true);
   });
 });
 
