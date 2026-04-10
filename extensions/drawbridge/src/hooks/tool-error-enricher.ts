@@ -481,11 +481,16 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
           lastTimestamp: Date.now(),
         });
       } else {
-        // Success path — reset counter
+        // Ambiguous: event.error undefined could be true success or a
+        // content-wrapped MCP error.  Stash params but preserve the
+        // existing counter — tool_result_persist is the authoritative
+        // detector and will either increment (on content/details errors)
+        // or reset to 0 (on confirmed success).
+        const existing = attemptMap.get(key);
         attemptMap.set(key, {
-          attempts: 0,
+          attempts: existing?.attempts ?? 0,
           lastParams: event.params ?? {},
-          lastError: "",
+          lastError: existing?.lastError ?? "",
           lastTimestamp: Date.now(),
         });
       }
@@ -525,7 +530,22 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
         }
         contentError = lead.startsWith("Error:");
       }
-      if (!isErrorFlag && !detailsError && !contentError) return undefined;
+      if (!isErrorFlag && !detailsError && !contentError) {
+        // True success — reset counter (after_tool_call deferred this).
+        if (ctx.sessionKey) {
+          const rawTool = ctx.toolName ?? extractToolNameFromMessage(event.message);
+          if (rawTool) {
+            const tool = normalizeToolName(rawTool);
+            const k = `${ctx.sessionKey}::${tool}`;
+            const existing = attemptMap.get(k);
+            if (existing && existing.attempts > 0) {
+              existing.attempts = 0;
+              existing.lastError = "";
+            }
+          }
+        }
+        return undefined;
+      }
 
       // Guard: skip when sessionKey is undefined
       if (!ctx.sessionKey) return undefined;
@@ -542,10 +562,10 @@ export function createToolErrorEnricher(): ToolErrorEnricher {
       const key = `${ctx.sessionKey}::${toolName}`;
       let entry = attemptMap.get(key);
 
-      // Compensate for after_tool_call missing the error — when OpenClaw
-      // wraps MCP failures as content (isError: false), event.error is
-      // undefined so after_tool_call doesn't increment the counter.
-      if ((detailsError || contentError) && (!entry || entry.attempts === 0)) {
+      // Counter management for content/details errors — after_tool_call
+      // couldn't detect these (event.error was undefined), so we increment
+      // here.  For isError:true errors after_tool_call already incremented.
+      if (detailsError || contentError) {
         attemptMap.set(key, {
           attempts: (entry?.attempts ?? 0) + 1,
           lastParams: entry?.lastParams ?? {},

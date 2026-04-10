@@ -365,17 +365,21 @@ describe("circuit breaker", () => {
   });
 
   it("resets after successful call", () => {
-    const { handleAfterToolCall, handleBeforeToolCall } = enricher._handlers;
+    const { handleAfterToolCall, handleBeforeToolCall, handleToolResultPersist } = enricher._handlers;
     const ctx = { sessionKey: "session-1" };
 
     // Fail twice
     handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
     handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
 
-    // Succeed
+    // Succeed — after_tool_call preserves counter, tool_result_persist resets it
     handleAfterToolCall({ toolName: "memory_search" }, ctx);
+    handleToolResultPersist(
+      { message: { isError: false, content: [{ type: "text", text: "Results: 5" }] }, isSynthetic: false },
+      { sessionKey: "session-1", toolName: "memory_search" },
+    );
 
-    // Fail once more — should not be blocked (counter reset)
+    // Fail once more — should not be blocked (counter was reset)
     handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
 
     const result = handleBeforeToolCall({ toolName: "memory_search" }, ctx);
@@ -399,13 +403,33 @@ describe("after_tool_call counter", () => {
     expect(enricher._attemptMap.get("s1::memory_search")?.attempts).toBe(2);
   });
 
-  it("resets to 0 on success", () => {
+  it("preserves counter when event.error is undefined (ambiguous)", () => {
     const { handleAfterToolCall } = enricher._handlers;
     const ctx = { sessionKey: "s1" };
 
     handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
     handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
+    // event.error undefined — could be content-wrapped error or true success.
+    // after_tool_call preserves counter; tool_result_persist decides.
     handleAfterToolCall({ toolName: "memory_search" }, ctx);
+
+    expect(enricher._attemptMap.get("s1::memory_search")?.attempts).toBe(2);
+  });
+
+  it("resets to 0 via tool_result_persist on confirmed success", () => {
+    const { handleAfterToolCall, handleToolResultPersist } = enricher._handlers;
+    const ctx = { sessionKey: "s1" };
+
+    handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
+    handleAfterToolCall({ toolName: "memory_search", error: "timeout" }, ctx);
+    expect(enricher._attemptMap.get("s1::memory_search")?.attempts).toBe(2);
+
+    // Successful tool result — tool_result_persist resets the counter
+    handleAfterToolCall({ toolName: "memory_search" }, ctx);
+    handleToolResultPersist(
+      { message: { isError: false, content: [{ type: "text", text: "Query Confidence: 0.85" }] }, isSynthetic: false },
+      { sessionKey: "s1", toolName: "memory_search" },
+    );
 
     expect(enricher._attemptMap.get("s1::memory_search")?.attempts).toBe(0);
   });
@@ -512,6 +536,23 @@ describe("tool_result_persist enrichment", () => {
 
     // Counter should have been compensated to 1
     expect(enricher._attemptMap.get("test-session-key::memory_search")?.attempts).toBe(1);
+  });
+
+  it("accumulates counter on repeated content-based failures", () => {
+    const { handleAfterToolCall, handleToolResultPersist } = enricher._handlers;
+    const ctx = { sessionKey: "content-repeat" };
+    const contentErrorMsg = {
+      isError: false,
+      content: [{ type: "text", text: "Error: search failed\nDetails: connection refused" }],
+      details: { mcpServer: "vigil-harbor", mcpTool: "memory_search" },
+    };
+
+    // Three consecutive content-based failures (event.error always undefined)
+    for (let i = 1; i <= 3; i++) {
+      handleAfterToolCall({ toolName: "memory_search" }, ctx);
+      handleToolResultPersist({ message: contentErrorMsg, isSynthetic: false }, { sessionKey: "content-repeat", toolName: "memory_search" });
+      expect(enricher._attemptMap.get("content-repeat::memory_search")?.attempts).toBe(i);
+    }
   });
 
   it("skips when isSynthetic is true", () => {
@@ -961,8 +1002,9 @@ describe("prefixed tool names", () => {
   });
 
   it("tool_result_persist enriches prefixed tool errors", () => {
+    // Content-based error: event.error is undefined in after_tool_call
     enricher._handlers.handleAfterToolCall(
-      { toolName: "vigil-harbor__memory_search", error: "fetch failed" },
+      { toolName: "vigil-harbor__memory_search" },
       { sessionKey: "prefix-test" },
     );
 
