@@ -18,6 +18,7 @@ import { handleBeforeDispatch } from "./hooks/before-dispatch.js";
 import { handleMessageSending } from "./hooks/message-sending.js";
 import { handleLlmOutput } from "./hooks/llm-output.js";
 import { handleGatewayStop } from "./hooks/gateway-stop.js";
+import { createToolErrorEnricher } from "./hooks/tool-error-enricher.js";
 import type { VigilHarborIngestFn, AlertNotifyFn } from "./audit-sink.js";
 
 export type { DrawbridgePluginConfig } from "./config.js";
@@ -63,13 +64,13 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
     description: "Session-aware content sanitization via ClawMoat + Drawbridge",
 
     register(api: {
-      registerHook: (
-        event: string,
+      on: (
+        hookName: string,
         handler: (...args: unknown[]) => unknown,
-        opts?: { name?: string },
+        opts?: { priority?: number },
       ) => void;
     }) {
-      api.registerHook(
+      api.on(
         "message_received",
         async (event: unknown, ctx: unknown) => {
           const state = await getState();
@@ -80,10 +81,9 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
             ctx as Parameters<typeof handleMessageReceived>[2],
           );
         },
-        { name: "drawbridge:message_received" },
       );
 
-      api.registerHook(
+      api.on(
         "before_dispatch",
         async (event: unknown, ctx: unknown) => {
           const state = await getState();
@@ -94,10 +94,9 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
             ctx as Parameters<typeof handleBeforeDispatch>[2],
           );
         },
-        { name: "drawbridge:before_dispatch" },
       );
 
-      api.registerHook(
+      api.on(
         "message_sending",
         async (event: unknown, ctx: unknown) => {
           const state = await getState();
@@ -108,10 +107,9 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
             ctx as Parameters<typeof handleMessageSending>[2],
           );
         },
-        { name: "drawbridge:message_sending" },
       );
 
-      api.registerHook(
+      api.on(
         "llm_output",
         async (event: unknown, ctx: unknown) => {
           const state = await getState();
@@ -122,11 +120,10 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
             ctx as Parameters<typeof handleLlmOutput>[2],
           );
         },
-        { name: "drawbridge:llm_output" },
       );
 
-      api.registerHook(
-        "gateway:stop",
+      api.on(
+        "gateway_stop",
         async () => {
           // Only tear down if init already happened — never trigger lazy init during shutdown
           if (!stateP) return;
@@ -134,8 +131,14 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
           if (!state) return;
           handleGatewayStop(state);
         },
-        { name: "drawbridge:gateway_stop" },
       );
+
+      // Tool error enricher — independent of PluginState (no async init needed)
+      const enricher = createToolErrorEnricher();
+      enricher.registerHooks(api);
     },
   };
 }
+
+// Default export for OpenClaw plugin loader
+export default createDrawbridgePlugin();

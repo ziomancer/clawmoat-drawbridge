@@ -2,6 +2,23 @@
 
 All notable changes to Drawbridge are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] — 2026-04-09
+
+### Added
+- **Tool error enricher** — three-hook system that intercepts MCP tool failures, classifies by category/severity, and appends structured recovery guidance to the LLM context window
+- Circuit breaker blocking tool calls after 3 consecutive failures per tool
+- Three-layer template cascade: tool-specific > category > global fallback
+- Sensitive parameter redaction and 800-char enrichment cap
+- Tool name normalization for OpenClaw MCP server prefixes
+- Counter compensation in `tool_result_persist` for content-based error detection
+- 178 extension tests (was 68)
+
+### Fixed
+- Migrated all hook registrations from legacy `api.registerHook()` to typed `api.on()` — hooks were registered but never dispatched in live runtime
+- Changed `gateway:stop` hook name to `gateway_stop` (typed hook system uses underscores)
+- Added `EAI_AGAIN` to server_unreachable error pattern
+- Synchronous handler invariant: `tool_result_persist` no longer returns a Promise
+
 ## [1.1.1] — 2026-04-02
 
 ### Fixed

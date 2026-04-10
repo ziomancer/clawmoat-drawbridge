@@ -1,6 +1,6 @@
 {
   "name": "@vigil-harbor/openclaw-drawbridge",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "OpenClaw plugin — session-aware content sanitization via ClawMoat + Drawbridge",
   "exports": {
@@ -11,6 +11,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "openclaw": {
+    "extensions": ["./dist/index.js"]
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

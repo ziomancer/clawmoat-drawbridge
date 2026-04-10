@@ -11,7 +11,20 @@ import type { ResolvedConfig } from "../src/config.js";
 import { resolveConfig } from "../src/config.js";
 import type { PluginState } from "../src/pipeline-factory.js";
 import { LogSink } from "../src/audit-sink.js";
-import type { HookContext, BeforeDispatchContext, BeforeDispatchEvent, MessageReceivedEvent, MessageSendingEvent, LlmOutputEvent } from "../src/types/openclaw.js";
+import type {
+  HookContext,
+  BeforeDispatchContext,
+  BeforeDispatchEvent,
+  MessageReceivedEvent,
+  MessageSendingEvent,
+  LlmOutputEvent,
+  ToolResultPersistEvent,
+  ToolResultPersistContext,
+  AfterToolCallEvent,
+  AfterToolCallContext,
+  BeforeToolCallEvent,
+  BeforeToolCallContext,
+} from "../src/types/openclaw.js";
 
 // ---------------------------------------------------------------------------
 // Mock ClawMoat engine
@@ -193,6 +206,71 @@ export function makeLlmOutputEvent(overrides?: Partial<LlmOutputEvent>): LlmOutp
     provider: "lmstudio",
     model: "qwen/qwen3.5-35b-a3b",
     assistantTexts: ["Here is my response."],
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool error enricher event/context builders
+// ---------------------------------------------------------------------------
+
+export function makeToolResultPersistEvent(
+  overrides?: Partial<ToolResultPersistEvent> & { message?: Record<string, unknown> },
+): ToolResultPersistEvent {
+  return {
+    message: {
+      isError: true,
+      content: [{ type: "text", text: "Request timeout" }],
+    },
+    isSynthetic: false,
+    ...overrides,
+  };
+}
+
+export function makeToolResultPersistCtx(
+  overrides?: Partial<ToolResultPersistContext>,
+): ToolResultPersistContext {
+  return {
+    sessionKey: "test-session-key",
+    toolName: "memory_search",
+    ...overrides,
+  };
+}
+
+export function makeAfterToolCallEvent(
+  overrides?: Partial<AfterToolCallEvent>,
+): AfterToolCallEvent {
+  return {
+    toolName: "memory_search",
+    params: { query: "test query", namespace: "personal" },
+    error: "Request timeout",
+    ...overrides,
+  };
+}
+
+export function makeAfterToolCallCtx(
+  overrides?: Partial<AfterToolCallContext>,
+): AfterToolCallContext {
+  return {
+    sessionKey: "test-session-key",
+    ...overrides,
+  };
+}
+
+export function makeBeforeToolCallEvent(
+  overrides?: Partial<BeforeToolCallEvent>,
+): BeforeToolCallEvent {
+  return {
+    toolName: "memory_search",
+    ...overrides,
+  };
+}
+
+export function makeBeforeToolCallCtx(
+  overrides?: Partial<BeforeToolCallContext>,
+): BeforeToolCallContext {
+  return {
+    sessionKey: "test-session-key",
     ...overrides,
   };
 }
