@@ -23,12 +23,6 @@ export function handleBeforeToolCallGuard(
     if (!state.config.toolGuardEnabled) return PASS;
     if (!state.guard) return PASS;
 
-    const normalizedLower = event.toolName.toLowerCase();
-    const exemptTools = state.config.exemptTools;
-    if (exemptTools.some((t) => normalizedLower.includes(t.toLowerCase()))) {
-      return PASS;
-    }
-
     const sessionId = deriveSessionId(ctx);
 
     const result = state.guard.evaluate({
@@ -39,34 +33,24 @@ export function handleBeforeToolCallGuard(
       agentId: ctx.agentId,
     });
 
-    // Emit audit event via audit sink
-    if (state.auditSink) {
-      const eventType = result.block
-        ? ("tool_policy_block" as const)
-        : ("tool_policy_allow" as const);
-      state.auditSink.emit({
-        event: eventType,
-        timestamp: new Date().toISOString(),
-        sessionId,
-        toolName: result.audit.toolName,
-        paramsHash: result.audit.paramsHash,
-        policyDecision: result.audit.policyDecision,
-        policyReason: result.audit.policyReason,
-        policySeverity: result.audit.policySeverity,
-        escalationApplied: result.audit.escalationApplied,
-        sessionTier: result.audit.sessionTier,
-        paramScanUnsafe: result.audit.paramScanUnsafe,
-        paramScanFindingCount: result.audit.paramScanFindingCount,
-        agentId: ctx.agentId,
-        toolCallId: event.toolCallId,
-      } as import("@vigil-harbor/clawmoat-drawbridge").ToolPolicyAuditEvent);
-    }
+    state.inbound.emitToolPolicy({
+      sessionId,
+      block: result.block,
+      toolName: result.audit.toolName,
+      paramsHash: result.audit.paramsHash,
+      policyDecision: result.audit.policyDecision,
+      policyReason: result.audit.policyReason,
+      policySeverity: result.audit.policySeverity,
+      escalationApplied: result.audit.escalationApplied,
+      sessionTier: result.audit.sessionTier,
+      paramScanUnsafe: result.audit.paramScanUnsafe,
+      paramScanFindingCount: result.audit.paramScanFindingCount,
+      agentId: ctx.agentId,
+      toolCallId: event.toolCallId,
+    });
 
-    // If blocked write tool, also emit write_failed
-    if (result.block && isWriteTool(result.audit.toolName) && state.auditSink) {
-      state.auditSink.emit({
-        event: "write_failed",
-        timestamp: new Date().toISOString(),
+    if (result.block && isWriteTool(result.audit.toolName)) {
+      state.inbound.emitWriteFailed({
         sessionId,
         toolName: result.audit.toolName,
         cause: "policy_block",
@@ -74,7 +58,7 @@ export function handleBeforeToolCallGuard(
         errorSummary: result.blockReason ?? "blocked by guard",
         agentId: ctx.agentId,
         toolCallId: event.toolCallId,
-      } as import("@vigil-harbor/clawmoat-drawbridge").WriteFailedAuditEvent);
+      });
     }
 
     if (result.block) {

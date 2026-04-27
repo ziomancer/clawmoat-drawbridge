@@ -556,6 +556,24 @@ export class DrawbridgePipeline {
   }
 
   // ---------------------------------------------------------------------------
+  // Out-of-band audit emission (for external callers like hook handlers)
+  // ---------------------------------------------------------------------------
+
+  emitToolPolicy(params: Parameters<AuditEmitter["emitToolPolicy"]>[0]): AlertPayload | null {
+    const event = this.auditor.emitToolPolicy(params);
+    if (!event) return null;
+    this.forwardToConsumer(event);
+    return this.alerter.evaluate(event);
+  }
+
+  emitWriteFailed(params: Parameters<AuditEmitter["emitWriteFailed"]>[0]): AlertPayload | null {
+    const event = this.auditor.emitWriteFailed(params);
+    if (!event) return null;
+    this.forwardToConsumer(event);
+    return this.alerter.evaluate(event);
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 

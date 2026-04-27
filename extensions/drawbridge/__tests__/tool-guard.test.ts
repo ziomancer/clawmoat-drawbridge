@@ -123,7 +123,6 @@ describe("tool-guard hook — disabled", () => {
 describe("tool-guard hook — state.guard null", () => {
   it("guard is null → returns {}", () => {
     const state = createTestState();
-    // state.guard is null from createTestState
     const result = handleBeforeToolCallGuard(
       state,
       makeBeforeToolCallEvent({ toolName: "exec" }),
@@ -134,11 +133,11 @@ describe("tool-guard hook — state.guard null", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Exemptions
+// Exemptions — guard handles them, not the hook
 // ---------------------------------------------------------------------------
 
 describe("tool-guard hook — exemptions", () => {
-  it("exempt tool passes through", () => {
+  it("exempt tool passes through and guard handles exemption", () => {
     const engine = mockPolicyEngine({ decision: "deny", reason: "bad" });
     const state = createGuardState({
       configOverrides: { exemptTools: ["exec"] },
@@ -187,14 +186,14 @@ describe("tool-guard hook — session key derivation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Audit routing
+// Audit routing — events go through pipeline's AuditEmitter (verbosity gated)
 // ---------------------------------------------------------------------------
 
 describe("tool-guard hook — audit routing", () => {
-  it("block emits tool_policy_block audit event", () => {
+  it("block calls inbound.emitToolPolicy with block=true", () => {
     const engine = mockPolicyEngine({ decision: "deny", reason: "dangerous" });
     const state = createGuardState({ policyEngine: engine });
-    const emitSpy = vi.spyOn(state.auditSink, "emit");
+    const spy = vi.spyOn(state.inbound, "emitToolPolicy");
 
     handleBeforeToolCallGuard(
       state,
@@ -202,17 +201,18 @@ describe("tool-guard hook — audit routing", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const blockEvent = emitSpy.mock.calls.find(
-      (call) => (call[0] as any).event === "tool_policy_block",
-    );
-    expect(blockEvent).toBeDefined();
-    expect((blockEvent![0] as any).policyDecision).toBe("deny");
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]![0]).toMatchObject({
+      block: true,
+      policyDecision: "deny",
+      policyReason: "dangerous",
+    });
   });
 
-  it("allow emits tool_policy_allow audit event", () => {
+  it("allow calls inbound.emitToolPolicy with block=false", () => {
     const engine = mockPolicyEngine({ decision: "allow" });
     const state = createGuardState({ policyEngine: engine });
-    const emitSpy = vi.spyOn(state.auditSink, "emit");
+    const spy = vi.spyOn(state.inbound, "emitToolPolicy");
 
     handleBeforeToolCallGuard(
       state,
@@ -220,16 +220,17 @@ describe("tool-guard hook — audit routing", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const allowEvent = emitSpy.mock.calls.find(
-      (call) => (call[0] as any).event === "tool_policy_allow",
-    );
-    expect(allowEvent).toBeDefined();
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]![0]).toMatchObject({
+      block: false,
+      policyDecision: "allow",
+    });
   });
 
   it("audit event includes sessionId, toolName, paramsHash", () => {
-    const engine = mockPolicyEngine({ decision: "allow" });
+    const engine = mockPolicyEngine({ decision: "deny" });
     const state = createGuardState({ policyEngine: engine });
-    const emitSpy = vi.spyOn(state.auditSink, "emit");
+    const spy = vi.spyOn(state.inbound, "emitToolPolicy");
 
     handleBeforeToolCallGuard(
       state,
@@ -237,23 +238,37 @@ describe("tool-guard hook — audit routing", () => {
       makeBeforeToolCallCtx({ sessionKey: "test-session" }),
     );
 
-    const event = emitSpy.mock.calls[0]![0] as Record<string, unknown>;
-    expect(event.sessionId).toBe("test-session");
-    expect(event.toolName).toBe("read");
-    expect(event.paramsHash).toMatch(/^[a-f0-9]{64}$/);
+    const params = spy.mock.calls[0]![0];
+    expect(params.sessionId).toBe("test-session");
+    expect(params.toolName).toBe("read");
+    expect(params.paramsHash).toMatch(/^[a-f0-9]{64}$/);
   });
-});
 
-// ---------------------------------------------------------------------------
-// Alert routing
-// ---------------------------------------------------------------------------
-
-describe("tool-guard hook — alert routing", () => {
-  it("block emits audit event that AlertManager can evaluate", () => {
-    const engine = mockPolicyEngine({ decision: "deny", reason: "bad tool" });
-    const state = createGuardState({ policyEngine: engine });
-    const events: Array<Record<string, unknown>> = [];
-    vi.spyOn(state.auditSink, "emit").mockImplementation((e: any) => events.push(e));
+  it("tool_policy_block passes verbosity gate at standard", () => {
+    const engine = mockPolicyEngine({ decision: "deny" });
+    const events: unknown[] = [];
+    const config = resolveConfig({ toolGuardEnabled: true });
+    const mockEngine = createMockEngine();
+    const tracker = new FrequencyTracker({
+      enabled: true, halfLifeMs: 100, rollingWindowMs: 60_000,
+      rollingThreshold: 10,
+      weights: { "drawbridge.prompt_injection.*": 20 },
+      thresholds: { tier1: 15, tier2: 40, tier3: 80 },
+      memory: { maxSessions: 100, sessionTtlMs: 300_000, maxNewSessionsPerMinute: 100 },
+    });
+    const inbound = new DrawbridgePipeline({
+      profile: config.inboundProfile, engine: mockEngine, tracker,
+      scanner: { blockThreshold: config.blockThreshold, direction: "inbound" },
+      audit: { verbosity: "standard", onEvent: (e) => events.push(e) },
+    });
+    const guard = new ToolCallGuard({
+      pipeline: inbound, tracker, engine,
+      escalateWarnings: true, scanParams: true,
+    });
+    const state: PluginState = {
+      inbound, outbound: inbound, tracker, guard, config,
+      cache: new Map(), auditSink: new LogSink(), teardown: () => {},
+    };
 
     handleBeforeToolCallGuard(
       state,
@@ -261,9 +276,65 @@ describe("tool-guard hook — alert routing", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const blockEvents = events.filter((e) => e.event === "tool_policy_block");
+    const blockEvents = events.filter((e: any) => e.event === "tool_policy_block");
     expect(blockEvents).toHaveLength(1);
-    expect(blockEvents[0]!.policyDecision).toBe("deny");
+  });
+
+  it("tool_policy_allow dropped at standard verbosity (min: high)", () => {
+    const engine = mockPolicyEngine({ decision: "allow" });
+    const events: unknown[] = [];
+    const config = resolveConfig({ toolGuardEnabled: true });
+    const mockEng = createMockEngine();
+    const tracker = new FrequencyTracker({
+      enabled: true, halfLifeMs: 100, rollingWindowMs: 60_000,
+      rollingThreshold: 10,
+      weights: { "drawbridge.prompt_injection.*": 20 },
+      thresholds: { tier1: 15, tier2: 40, tier3: 80 },
+      memory: { maxSessions: 100, sessionTtlMs: 300_000, maxNewSessionsPerMinute: 100 },
+    });
+    const inbound = new DrawbridgePipeline({
+      profile: config.inboundProfile, engine: mockEng, tracker,
+      scanner: { blockThreshold: config.blockThreshold, direction: "inbound" },
+      audit: { verbosity: "standard", onEvent: (e) => events.push(e) },
+    });
+    const guard = new ToolCallGuard({
+      pipeline: inbound, tracker, engine,
+      escalateWarnings: true, scanParams: true,
+    });
+    const state: PluginState = {
+      inbound, outbound: inbound, tracker, guard, config,
+      cache: new Map(), auditSink: new LogSink(), teardown: () => {},
+    };
+
+    handleBeforeToolCallGuard(
+      state,
+      makeBeforeToolCallEvent({ toolName: "read" }),
+      makeBeforeToolCallCtx(),
+    );
+
+    const allowEvents = events.filter((e: any) => e.event === "tool_policy_allow");
+    expect(allowEvents).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Alert routing — events reach AlertManager through pipeline
+// ---------------------------------------------------------------------------
+
+describe("tool-guard hook — alert routing", () => {
+  it("block event reaches AlertManager via pipeline", () => {
+    const engine = mockPolicyEngine({ decision: "deny", reason: "bad tool" });
+    const state = createGuardState({ policyEngine: engine });
+    const spy = vi.spyOn(state.inbound, "emitToolPolicy");
+
+    handleBeforeToolCallGuard(
+      state,
+      makeBeforeToolCallEvent({ toolName: "exec" }),
+      makeBeforeToolCallCtx(),
+    );
+
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]![0].block).toBe(true);
   });
 });
 
@@ -272,11 +343,10 @@ describe("tool-guard hook — alert routing", () => {
 // ---------------------------------------------------------------------------
 
 describe("tool-guard hook — write_failed emission", () => {
-  it("blocked write tool emits write_failed alongside tool_policy_block", () => {
+  it("blocked write tool calls inbound.emitWriteFailed", () => {
     const engine = mockPolicyEngine({ decision: "deny", reason: "bad write" });
     const state = createGuardState({ policyEngine: engine });
-    const events: Array<Record<string, unknown>> = [];
-    vi.spyOn(state.auditSink, "emit").mockImplementation((e: any) => events.push(e));
+    const spy = vi.spyOn(state.inbound, "emitWriteFailed");
 
     handleBeforeToolCallGuard(
       state,
@@ -284,20 +354,18 @@ describe("tool-guard hook — write_failed emission", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const blockEvent = events.find((e) => e.event === "tool_policy_block");
-    const writeFailEvent = events.find((e) => e.event === "write_failed");
-    expect(blockEvent).toBeDefined();
-    expect(writeFailEvent).toBeDefined();
-    expect((writeFailEvent as any).cause).toBe("policy_block");
-    expect((writeFailEvent as any).toolName).toBe("write");
-    expect((writeFailEvent as any).errorCategory).toBe("policy");
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy.mock.calls[0]![0]).toMatchObject({
+      cause: "policy_block",
+      toolName: "write",
+      errorCategory: "policy",
+    });
   });
 
-  it("blocked non-write tool does NOT emit write_failed", () => {
+  it("blocked non-write tool does NOT call emitWriteFailed", () => {
     const engine = mockPolicyEngine({ decision: "deny", reason: "blocked" });
     const state = createGuardState({ policyEngine: engine });
-    const events: Array<Record<string, unknown>> = [];
-    vi.spyOn(state.auditSink, "emit").mockImplementation((e: any) => events.push(e));
+    const spy = vi.spyOn(state.inbound, "emitWriteFailed");
 
     handleBeforeToolCallGuard(
       state,
@@ -305,15 +373,13 @@ describe("tool-guard hook — write_failed emission", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const writeFailEvents = events.filter((e) => e.event === "write_failed");
-    expect(writeFailEvents).toHaveLength(0);
+    expect(spy).not.toHaveBeenCalled();
   });
 
-  it("allowed write tool does NOT emit write_failed", () => {
+  it("allowed write tool does NOT call emitWriteFailed", () => {
     const engine = mockPolicyEngine({ decision: "allow" });
     const state = createGuardState({ policyEngine: engine });
-    const events: Array<Record<string, unknown>> = [];
-    vi.spyOn(state.auditSink, "emit").mockImplementation((e: any) => events.push(e));
+    const spy = vi.spyOn(state.inbound, "emitWriteFailed");
 
     handleBeforeToolCallGuard(
       state,
@@ -321,8 +387,7 @@ describe("tool-guard hook — write_failed emission", () => {
       makeBeforeToolCallCtx(),
     );
 
-    const writeFailEvents = events.filter((e) => e.event === "write_failed");
-    expect(writeFailEvents).toHaveLength(0);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
@@ -356,7 +421,6 @@ describe("tool-guard hook — coexistence with enricher", () => {
       .filter((h) => h.hook === "before_tool_call")
       .sort((a, b) => a.priority - b.priority);
 
-    // Guard at priority 10, enricher at default (100)
     expect(btcHandlers.length).toBeGreaterThanOrEqual(2);
     expect(btcHandlers[0]!.priority).toBe(10);
   });
@@ -378,7 +442,6 @@ describe("tool-guard hook — coexistence with enricher", () => {
     const enricherBtc = handlers.find((h) => h.hook === "before_tool_call");
     expect(enricherBtc).toBeDefined();
 
-    // Enricher should not block a clean tool call
     const result = enricherBtc!.handler(
       makeBeforeToolCallEvent({ toolName: "read" }),
       makeBeforeToolCallCtx(),
@@ -395,7 +458,6 @@ describe("tool-guard hook — fail-open", () => {
   it("guard.evaluate throws → returns {}", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const state = createGuardState();
-    // Sabotage the guard to throw
     (state as any).guard = {
       evaluate: () => {
         throw new Error("guard boom");

@@ -11,7 +11,7 @@ import type {
 import { sha256 } from "../lib/sha256.js";
 import { safeStringify } from "../lib/safe-stringify.js";
 
-const TOOL_NAME_MAP: Record<string, string> = {
+const TOOL_NAME_MAP: Readonly<Record<string, string>> = Object.freeze({
   bash: "exec",
   shell: "exec",
   execute: "exec",
@@ -24,7 +24,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   web_fetch: "browser",
   web_search: "browser",
   navigate: "browser",
-};
+});
 
 function normalizeForPolicy(rawToolName: string): string {
   const sep = rawToolName.lastIndexOf("__");
