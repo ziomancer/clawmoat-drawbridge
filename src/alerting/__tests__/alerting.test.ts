@@ -393,15 +393,110 @@ describe("Rule 4: scan block after syntactic pass", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rule 5: Write fail spike (deferred)
+// Rule 5: Write fail spike (v1.3 — unblocked)
 // ---------------------------------------------------------------------------
 
-describe("Rule 5: write fail spike (deferred)", () => {
-  it("18 — unknown event types don't crash and produce no alert", () => {
+describe("Rule 5: write fail spike", () => {
+  let now: number;
+
+  beforeEach(() => {
+    now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+  });
+
+  it("18 — 3 write_failed events in window → alert fires", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        writeFailSpike: { enabled: true, count: 3, windowMinutes: 5 },
+      } as any,
+    });
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    expect(alerts).toHaveLength(0);
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.ruleId).toBe("writeFailSpike");
+    expect(alerts[0]!.severity).toBe("medium");
+  });
+
+  it("18b — 2 write_failed events (below threshold) → no alert", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        writeFailSpike: { enabled: true, count: 3, windowMinutes: 5 },
+      } as any,
+    });
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    expect(alerts).toHaveLength(0);
+  });
+
+  it("18c — writeFailSpike disabled → no alert", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        writeFailSpike: { enabled: false, count: 3, windowMinutes: 5 },
+      } as any,
+    });
+    for (let i = 0; i < 5; i++) {
+      manager.evaluate(makeEvent("write_failed", "s1"));
+    }
+    expect(alerts).toHaveLength(0);
+  });
+
+  it("18d — events outside window → no alert", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        writeFailSpike: { enabled: true, count: 3, windowMinutes: 5 },
+      } as any,
+    });
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    now += 6 * 60_000; // advance past window
+    manager.evaluate(makeEvent("write_failed", "s1"));
+    // Only 1 event in the current window
+    expect(alerts).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rule 6: Tool policy block (v1.3)
+// ---------------------------------------------------------------------------
+
+describe("Rule 6: tool policy block", () => {
+  let now: number;
+
+  beforeEach(() => {
+    now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+  });
+
+  it("19 — 1 tool_policy_block event (default count=1) → alert fires", () => {
     const { manager, alerts } = createTestManager();
-    expect(() => {
-      manager.evaluate(makeEvent("write_failed" as any, "session-1"));
-    }).not.toThrow();
+    manager.evaluate(makeEvent("tool_policy_block", "s1"));
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]!.ruleId).toBe("toolPolicyBlock");
+    expect(alerts[0]!.severity).toBe("high");
+  });
+
+  it("19b — toolPolicyBlock disabled → no alert", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        toolPolicyBlock: { enabled: false, count: 1, windowMinutes: 10 },
+      } as any,
+    });
+    manager.evaluate(makeEvent("tool_policy_block", "s1"));
+    expect(alerts).toHaveLength(0);
+  });
+
+  it("19c — event outside window → no alert", () => {
+    const { manager, alerts } = createTestManager({
+      rules: {
+        toolPolicyBlock: { enabled: true, count: 2, windowMinutes: 10 },
+      } as any,
+    });
+    manager.evaluate(makeEvent("tool_policy_block", "s1"));
+    now += 11 * 60_000;
+    manager.evaluate(makeEvent("tool_policy_block", "s1"));
+    // Each window only has 1 event, count is 2
     expect(alerts).toHaveLength(0);
   });
 });

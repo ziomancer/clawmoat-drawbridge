@@ -43,6 +43,19 @@ export interface DrawbridgePluginConfig {
   exemptChannels?: string[];
   /** Sender IDs exempt from scanning. */
   exemptSenders?: string[];
+
+  /** Whether the tool call policy guard is enabled. Default: true */
+  toolGuardEnabled?: boolean;
+  /** Tools that skip policy evaluation (still audited). */
+  exemptTools?: string[];
+  /** Allowlist for tier2+ sessions. Default: ["read"] */
+  restrictedTools?: string[];
+  /** Custom ClawMoat policies for tool evaluation. */
+  toolPolicies?: Record<string, unknown>;
+  /** Promote "warn" to "block" at tier1+. Default: true */
+  escalateWarnings?: boolean;
+  /** Scan tool params through content pipeline. Default: true */
+  scanParams?: boolean;
 }
 
 export interface ResolvedConfig {
@@ -61,6 +74,12 @@ export interface ResolvedConfig {
   alertChannel: string | undefined;
   exemptChannels: readonly string[];
   exemptSenders: readonly string[];
+  toolGuardEnabled: boolean;
+  exemptTools: readonly string[];
+  restrictedTools: readonly string[];
+  toolPolicies: Record<string, unknown> | undefined;
+  escalateWarnings: boolean;
+  scanParams: boolean;
 }
 
 export function resolveConfig(input?: DrawbridgePluginConfig): Readonly<ResolvedConfig> {
@@ -89,5 +108,11 @@ export function resolveConfig(input?: DrawbridgePluginConfig): Readonly<Resolved
     alertChannel: cfg.alertChannel,
     exemptChannels: Object.freeze([...(cfg.exemptChannels ?? [])]),
     exemptSenders: Object.freeze([...(cfg.exemptSenders ?? [])]),
+    toolGuardEnabled: cfg.toolGuardEnabled ?? true,
+    exemptTools: Object.freeze([...(cfg.exemptTools ?? [])]),
+    restrictedTools: Object.freeze([...(cfg.restrictedTools ?? ["read"])]),
+    toolPolicies: cfg.toolPolicies,
+    escalateWarnings: cfg.escalateWarnings ?? true,
+    scanParams: cfg.scanParams ?? true,
   });
 }

@@ -2,6 +2,31 @@
 
 All notable changes to Drawbridge are documented here. Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] — 2026-04-27
+
+### Added
+- **Tool Call Policy Guard**: Security gating for tool calls via ClawMoat
+  `evaluateTool()` + parameter content scanning + frequency-aware escalation.
+  New `ToolCallGuard` class in core library, wired into OpenClaw's
+  `before_tool_call` hook at priority 10.
+- `tool_policy_block` and `tool_policy_allow` audit event types
+- `toolPolicyBlock` alert rule (fires on any blocked tool call)
+- `write_failed` audit event type (unblocks Alert Rule 5: `writeFailSpike`)
+- `WriteFailedAuditEvent` interface
+- Guard configuration: `exemptTools`, `restrictedTools`, `toolPolicies`,
+  `escalateWarnings`, `scanParams`
+
+### Changed
+- ClawMoat dev dependency bumped to `^0.8.0` (peer dep stays at `>=0.7.0` — duck-typing keeps backward compat)
+- `BeforeToolCallEvent` type stub widened: added `params?` and `toolCallId?`
+- `BeforeToolCallContext` type stub widened: added `agentId?`
+- `EVENT_MIN_VERBOSITY`, `DEFAULT_ALERT_RULES`, `DEFAULT_ALERT_CONFIG` rebuilt
+  as new frozen objects (added entries for v1.3 event types and alert rules)
+
+### Fixed
+- Alert Rule 5 (`writeFailSpike`) now functional — was blocked on missing
+  `write_failed` audit event type (tracked in DEFERRED.md)
+
 ## [1.2.0] — 2026-04-09
 
 ### Added

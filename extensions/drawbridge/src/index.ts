@@ -18,6 +18,7 @@ import { handleBeforeDispatch } from "./hooks/before-dispatch.js";
 import { handleMessageSending } from "./hooks/message-sending.js";
 import { handleLlmOutput } from "./hooks/llm-output.js";
 import { handleGatewayStop } from "./hooks/gateway-stop.js";
+import { handleBeforeToolCallGuard } from "./hooks/before-tool-call-guard.js";
 import { createToolErrorEnricher } from "./hooks/tool-error-enricher.js";
 import type { VigilHarborIngestFn, AlertNotifyFn } from "./audit-sink.js";
 
@@ -131,6 +132,21 @@ export function createDrawbridgePlugin(opts?: CreatePluginOptions) {
           if (!state) return;
           handleGatewayStop(state);
         },
+      );
+
+      // Tool call policy guard — security gating at priority 10 (before enricher)
+      api.on(
+        "before_tool_call",
+        async (event: unknown, ctx: unknown) => {
+          const state = await getState();
+          if (!state) return {};
+          return handleBeforeToolCallGuard(
+            state,
+            event as import("./types/openclaw.js").BeforeToolCallEvent,
+            ctx as import("./types/openclaw.js").BeforeToolCallContext,
+          );
+        },
+        { priority: 10 },
       );
 
       // Tool error enricher — independent of PluginState (no async init needed)

@@ -103,10 +103,13 @@ export interface AfterToolCallContext {
 /** Event shape for `before_tool_call` — fires before tool invocation (sequential, can block). */
 export interface BeforeToolCallEvent {
   toolName: string;
+  params?: Record<string, unknown>;
+  toolCallId?: string;
 }
 
 export interface BeforeToolCallContext {
   sessionKey?: string;
+  agentId?: string;
 }
 
 export interface BeforeToolCallResult {

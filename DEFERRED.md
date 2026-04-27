@@ -2,15 +2,14 @@
 
 Tracked items that were intentionally deferred or are blocked on dependencies.
 
-## Blocked
-
-### writeFailSpike alert rule
-- **Location:** `src/alerting/index.ts:159`
-- **Status:** Blocked — `write_failed` audit event type does not exist yet
-- **Description:** Alert Rule 5 (write fail spike detection) cannot be implemented until the `write_failed` event is added to the Drawbridge audit event taxonomy. The `AlertRuleId` type and `AlertRuleConfigs` interface already define the rule shape; the `evaluate()` switch statement has a placeholder comment. Test stubs exist in `src/alerting/__tests__/alerting.test.ts:399`.
-- **To unblock:** Add `write_failed` to `AuditEventType` in `src/types/audit.ts`, define its event interface, assign a verbosity tier, then wire it through the pipeline.
-
 ## Deferred Enhancements
+
+### Enricher → write_failed emission
+- **Status:** Deferred to v1.3.x patch
+- **Description:** The tool error enricher could emit `write_failed` when it
+  classifies an error on write/edit/apply_patch tools. Currently only the guard
+  hook handler emits `write_failed` (on blocked writes). Adding enricher emission
+  would capture actual runtime write failures, not just policy-blocked ones.
 
 ### Per-severity rate-limit buckets (alerting)
 - **Source:** Pass 3, Phase 2.2 (optional)

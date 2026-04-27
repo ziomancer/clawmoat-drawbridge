@@ -8,9 +8,10 @@
 import {
   DrawbridgePipeline,
   FrequencyTracker,
+  ToolCallGuard,
   sha256,
 } from "@vigil-harbor/clawmoat-drawbridge";
-import type { PipelineResult } from "@vigil-harbor/clawmoat-drawbridge";
+import type { PipelineResult, ClawMoatPolicyEngine } from "@vigil-harbor/clawmoat-drawbridge";
 import type { ResolvedConfig } from "./config.js";
 import { createAuditSink } from "./audit-sink.js";
 import type { AuditSink, VigilHarborIngestFn, AlertNotifyFn } from "./audit-sink.js";
@@ -40,6 +41,7 @@ export interface PluginState {
   inbound: DrawbridgePipeline;
   outbound: DrawbridgePipeline;
   tracker: FrequencyTracker;
+  guard: ToolCallGuard | null;
   config: ResolvedConfig;
   cache: Map<string, ScanCacheEntry>;
   auditSink: AuditSink;
@@ -175,7 +177,28 @@ export async function initializePluginState(opts: InitOptions): Promise<PluginSt
     },
   });
 
-  // 5. Scan cache with periodic sweep
+  // 5. Tool call policy guard
+  let guard: ToolCallGuard | null = null;
+  if (config.toolGuardEnabled) {
+    const policyEngine =
+      engine &&
+      typeof (engine as Record<string, unknown>).evaluateTool === "function"
+        ? (engine as ClawMoatPolicyEngine)
+        : undefined;
+
+    guard = new ToolCallGuard({
+      pipeline: inbound,
+      tracker,
+      engine: policyEngine,
+      policies: config.toolPolicies,
+      exemptTools: [...config.exemptTools],
+      restrictedTools: [...config.restrictedTools],
+      escalateWarnings: config.escalateWarnings,
+      scanParams: config.scanParams,
+    });
+  }
+
+  // 6. Scan cache with periodic sweep
   const cache = new Map<string, ScanCacheEntry>();
 
   const sweepInterval = setInterval(() => {
@@ -194,6 +217,7 @@ export async function initializePluginState(opts: InitOptions): Promise<PluginSt
     inbound,
     outbound,
     tracker,
+    guard,
     config,
     cache,
     auditSink,
