@@ -504,6 +504,121 @@ describe("AuditEmitter — stats", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tool policy + write_failed emitters (v1.3)
+// ---------------------------------------------------------------------------
+
+describe("AuditEmitter — tool policy emitter", () => {
+  it("emitToolPolicy block → tool_policy_block at minimal", () => {
+    const { emitter, events } = createTestEmitter({ verbosity: "minimal" });
+    const ev = emitter.emitToolPolicy({
+      sessionId: "s1",
+      block: true,
+      toolName: "exec",
+      paramsHash: "abc123",
+      policyDecision: "deny",
+      policyReason: "dangerous",
+      policySeverity: "critical",
+      escalationApplied: false,
+      sessionTier: "none",
+      paramScanUnsafe: false,
+      paramScanFindingCount: 0,
+    });
+    expect(ev).not.toBeNull();
+    expect(ev!.event).toBe("tool_policy_block");
+    const emitted = events.filter((e) => e.event === "tool_policy_block");
+    expect(emitted).toHaveLength(1);
+  });
+
+  it("emitToolPolicy allow → tool_policy_allow at high", () => {
+    const { emitter, events } = createTestEmitter({ verbosity: "high" });
+    const ev = emitter.emitToolPolicy({
+      sessionId: "s1",
+      block: false,
+      toolName: "read",
+      paramsHash: "def456",
+      policyDecision: "allow",
+      escalationApplied: false,
+      sessionTier: "none",
+      paramScanUnsafe: false,
+      paramScanFindingCount: 0,
+    });
+    expect(ev).not.toBeNull();
+    expect(ev!.event).toBe("tool_policy_allow");
+  });
+
+  it("tool_policy_allow dropped at standard verbosity", () => {
+    const { emitter } = createTestEmitter({ verbosity: "standard" });
+    const ev = emitter.emitToolPolicy({
+      sessionId: "s1",
+      block: false,
+      toolName: "read",
+      paramsHash: "x",
+      policyDecision: "allow",
+      escalationApplied: false,
+      sessionTier: "none",
+      paramScanUnsafe: false,
+      paramScanFindingCount: 0,
+    });
+    expect(ev).toBeNull();
+  });
+
+  it("tool_policy_block emitted even at minimal", () => {
+    const { emitter } = createTestEmitter({ verbosity: "minimal" });
+    const ev = emitter.emitToolPolicy({
+      sessionId: "s1",
+      block: true,
+      toolName: "exec",
+      paramsHash: "x",
+      policyDecision: "deny",
+      escalationApplied: false,
+      sessionTier: "tier1",
+      paramScanUnsafe: true,
+      paramScanFindingCount: 2,
+    });
+    expect(ev).not.toBeNull();
+    expect(ev!.sessionTier).toBe("tier1");
+    expect(ev!.paramScanUnsafe).toBe(true);
+    expect(ev!.paramScanFindingCount).toBe(2);
+  });
+});
+
+describe("AuditEmitter — write_failed emitter", () => {
+  it("emitWriteFailed → write_failed at minimal", () => {
+    const { emitter, events } = createTestEmitter({ verbosity: "minimal" });
+    const ev = emitter.emitWriteFailed({
+      sessionId: "s1",
+      toolName: "write",
+      cause: "policy_block",
+      errorCategory: "policy",
+      errorSummary: "blocked by guard",
+    });
+    expect(ev).not.toBeNull();
+    expect(ev!.event).toBe("write_failed");
+    expect(ev!.cause).toBe("policy_block");
+    const emitted = events.filter((e) => e.event === "write_failed");
+    expect(emitted).toHaveLength(1);
+  });
+
+  it("write_failed includes all fields", () => {
+    const { emitter } = createTestEmitter();
+    const ev = emitter.emitWriteFailed({
+      sessionId: "s1",
+      toolName: "file_write",
+      cause: "runtime_error",
+      errorCategory: "timeout",
+      errorSummary: "write timed out",
+      agentId: "agent-1",
+      toolCallId: "tc-1",
+    });
+    expect(ev!.toolName).toBe("file_write");
+    expect(ev!.cause).toBe("runtime_error");
+    expect(ev!.errorCategory).toBe("timeout");
+    expect(ev!.agentId).toBe("agent-1");
+    expect(ev!.toolCallId).toBe("tc-1");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // meetsVerbosity utility (tests 39–41)
 // ---------------------------------------------------------------------------
 

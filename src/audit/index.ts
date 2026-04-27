@@ -23,6 +23,8 @@ import type {
   RuleTriggeredEvent,
   OutputDiffEvent,
   RawCaptureEvent,
+  ToolPolicyAuditEvent,
+  WriteFailedAuditEvent,
 } from "../types/audit.js";
 
 import {
@@ -325,6 +327,49 @@ export class AuditEmitter {
       messageId: params.messageId,
       agentId: params.agentId,
       profile: params.profile,
+    };
+    return this.emit(event) ? event : null;
+  }
+
+  /** Emit tool policy evaluation event */
+  emitToolPolicy(params: {
+    sessionId: string;
+    block: boolean;
+    toolName: string;
+    paramsHash: string;
+    policyDecision: string;
+    policyReason?: string;
+    policySeverity?: string;
+    escalationApplied: boolean;
+    sessionTier: import("../types/frequency.js").EscalationTier;
+    paramScanUnsafe: boolean;
+    paramScanFindingCount: number;
+    agentId?: string;
+    toolCallId?: string;
+  }): ToolPolicyAuditEvent | null {
+    const { block, ...rest } = params;
+    const event: ToolPolicyAuditEvent = {
+      ...rest,
+      event: block ? "tool_policy_block" : "tool_policy_allow",
+      timestamp: new Date().toISOString(),
+    };
+    return this.emit(event) ? event : null;
+  }
+
+  /** Emit write failure event */
+  emitWriteFailed(params: {
+    sessionId: string;
+    toolName: string;
+    cause: "policy_block" | "runtime_error";
+    errorCategory: string;
+    errorSummary: string;
+    agentId?: string;
+    toolCallId?: string;
+  }): WriteFailedAuditEvent | null {
+    const event: WriteFailedAuditEvent = {
+      ...params,
+      event: "write_failed",
+      timestamp: new Date().toISOString(),
     };
     return this.emit(event) ? event : null;
   }

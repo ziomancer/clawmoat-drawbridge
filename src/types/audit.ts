@@ -6,6 +6,7 @@
  */
 
 import type { AuditVerbosity } from "./common.js";
+import type { EscalationTier } from "./frequency.js";
 
 /** Verbosity tier (re-exported from common for convenience) */
 export type { AuditVerbosity };
@@ -43,7 +44,12 @@ export type AuditEventType =
   | "output_diff"
   // Maximum-tier raw capture
   | "raw_input_captured"
-  | "raw_output_captured";
+  | "raw_output_captured"
+  // Tool policy events (v1.3)
+  | "tool_policy_block"
+  | "tool_policy_allow"
+  // Write failure event (v1.3 — unblocks Alert Rule 5)
+  | "write_failed";
 
 // ---------------------------------------------------------------------------
 // Verbosity gating
@@ -69,8 +75,9 @@ export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = Objec
   frequency_escalation_tier3: "minimal",
   profile_loaded: "minimal",
   audit_config_loaded: "minimal",
-
   schema_fail: "minimal",
+  tool_policy_block: "minimal",
+  write_failed: "minimal",
 
   // Standard tier — pass events and summaries
   scan_pass: "standard",
@@ -83,6 +90,7 @@ export const EVENT_MIN_VERBOSITY: Record<AuditEventType, AuditVerbosity> = Objec
   // High tier — per-rule detail and diff
   rule_triggered: "high",
   output_diff: "high",
+  tool_policy_allow: "high",
 
   // Maximum tier — raw content capture
   raw_input_captured: "maximum",
@@ -232,6 +240,29 @@ export interface RawCaptureEvent extends AuditEvent {
   sha256: string;
 }
 
+/** Tool policy evaluation result (v1.3) */
+export interface ToolPolicyAuditEvent extends AuditEvent {
+  event: "tool_policy_block" | "tool_policy_allow";
+  toolName: string;
+  paramsHash: string;
+  policyDecision: string;
+  policyReason?: string;
+  policySeverity?: string;
+  escalationApplied: boolean;
+  sessionTier: EscalationTier;
+  paramScanUnsafe: boolean;
+  paramScanFindingCount: number;
+}
+
+/** Write operation failure (v1.3 — unblocks Alert Rule 5) */
+export interface WriteFailedAuditEvent extends AuditEvent {
+  event: "write_failed";
+  toolName: string;
+  cause: "policy_block" | "runtime_error";
+  errorCategory: string;
+  errorSummary: string;
+}
+
 /** Discriminated union of all typed audit events */
 export type TypedAuditEvent =
   | ScanAuditEvent
@@ -244,7 +275,9 @@ export type TypedAuditEvent =
   | FlagsSummaryEvent
   | RuleTriggeredEvent
   | OutputDiffEvent
-  | RawCaptureEvent;
+  | RawCaptureEvent
+  | ToolPolicyAuditEvent
+  | WriteFailedAuditEvent;
 
 // ---------------------------------------------------------------------------
 // Emitter config

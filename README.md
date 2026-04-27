@@ -4,7 +4,7 @@
 
 <p align="center">
   Session-aware content sanitization pipeline powered by <a href="https://github.com/darfaz/clawmoat">ClawMoat</a>.<br>
-  Standalone library — wire into any agent pipeline. 424 library tests + 69 plugin tests, security-hardened.
+  Standalone library — wire into any agent pipeline. 460 library tests + 199 plugin tests, security-hardened.
 </p>
 
 ---
@@ -159,6 +159,39 @@ const audit = new AuditEmitter({
 ```
 </details>
 
+### Tool Call Policy Guard
+
+Security gating for tool invocations. Wraps ClawMoat's `evaluateTool()` with parameter content scanning via the Drawbridge pipeline, frequency-aware escalation (warn→block at tier1+), and session-state enforcement. Two-stage tool name normalization strips server prefixes and maps aliases. Fail-open on error.
+
+<details>
+<summary>Usage</summary>
+
+```ts
+import { ToolCallGuard, DrawbridgePipeline, FrequencyTracker } from "@vigil-harbor/clawmoat-drawbridge";
+
+const guard = new ToolCallGuard({
+  pipeline,
+  tracker,
+  engine: clawmoatInstance,  // optional — duck-typed for evaluateTool()
+  exemptTools: ["read"],
+  restrictedTools: ["read"],
+  escalateWarnings: true,
+  scanParams: true,
+});
+
+const result = guard.evaluate({
+  toolName: "exec",
+  params: { command: "rm -rf /" },
+  sessionId: "session-123",
+});
+
+if (result.block) {
+  console.log("Blocked:", result.blockReason);
+}
+// result.audit contains structured metadata for audit trails
+```
+</details>
+
 ### Schema Validator
 
 Validates MCP tool output against registered schemas with discriminated union support. Colon-namespaced keys (`serverName:toolName`), prototype-pollution-safe field checks, and fail-closed defaults. Runs as a standalone module or wired into the pipeline.
@@ -255,6 +288,13 @@ if (result.terminated) {
 ## Architecture
 
 ```
+  ┌─────────────────────────────────────────────────┐
+  │              ToolCallGuard (v1.3)               │
+  │  before_tool_call → evaluate(toolName, params)  │
+  │  session check → exempt → param scan → policy   │
+  │  → frequency escalation → audit + alert         │
+  └─────────────────────────────────────────────────┘
+
                     ┌─────────────────────────────────────┐
                     │           DrawbridgePipeline        │
                     │            inspect(input)           │
@@ -279,7 +319,7 @@ if (result.terminated) {
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
                     │   Schema Validator (MCP only)       │                   │
-                    │   discriminated unions, field types  │                   │
+                    │   discriminated unions, field types │                   │
                     └──────────────┬──────────────────────┘                   │
                                    │                                          │
                     ┌──────────────▼──────────────────────┐                   │
@@ -318,12 +358,13 @@ All modules are standalone — use individually or together. Context profiles tu
 | Schema Validator | v1.1 | 17 | ✅ Implemented + hardened |
 | Profiles | v1.1 | 24 | ✅ Deep-frozen resolved profiles |
 | Sanitize | v1.1 | 38 | ✅ HMAC hashing, overlap merge |
-| Audit Emitter | v1.1 | 41 | ✅ Config validation, verbosity gating |
-| Alert Manager | v1.1 | 38 | ✅ Critical exempt, error boundary |
+| Audit Emitter | v1.3 | 47 | ✅ Config validation, verbosity gating |
+| Alert Manager | v1.3 | 44 | ✅ Critical exempt, error boundary |
+| Tool Call Guard | v1.3 | 24 | ✅ Policy eval, param scan, escalation |
 | Security Audit | — | 45 | ✅ 20 findings, all addressed |
 | Pipeline | v1.1 | 62 | ✅ Validation hooks, defensive copies |
 | Hardening Tests | — | 25 | ✅ Pass 3 coverage |
-| OpenClaw Plugin | v1.0 | 69 | ✅ Hook-only, fail-open, scan cache |
+| OpenClaw Plugin | v1.3 | 199 | ✅ Hook-only, fail-open, tool guard |
 
 ## Security
 

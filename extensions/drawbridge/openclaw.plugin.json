@@ -75,6 +75,38 @@
         "type": "array",
         "items": { "type": "string" },
         "default": []
+      },
+      "toolGuardEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable tool call policy guard"
+      },
+      "exemptTools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Tools exempt from policy evaluation"
+      },
+      "restrictedTools": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["read"],
+        "description": "Tool allowlist for tier2 escalated sessions (tier3 blocks all tools unconditionally)"
+      },
+      "toolPolicies": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Custom ClawMoat policy overrides for tool evaluation"
+      },
+      "escalateWarnings": {
+        "type": "boolean",
+        "default": true,
+        "description": "Promote ClawMoat warn decisions to block at tier1+"
+      },
+      "scanParams": {
+        "type": "boolean",
+        "default": true,
+        "description": "Scan tool parameters through the content pipeline"
       }
     }
   }

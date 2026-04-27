@@ -137,6 +137,7 @@ export function createTestState(
     inbound,
     outbound,
     tracker,
+    guard: null,
     config,
     cache: new Map(),
     auditSink: new LogSink(),

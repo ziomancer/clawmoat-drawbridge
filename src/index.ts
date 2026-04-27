@@ -25,6 +25,9 @@ export { AlertManager } from "./alerting/index.js";
 export { DrawbridgePipeline } from "./pipeline/index.js";
 export { safeStringify } from "./lib/safe-stringify.js";
 
+// === v1.3 implemented ===
+export { ToolCallGuard } from "./guard/index.js";
+
 /** Scanner and sanitize types */
 export type {
   // Scanner (v0.1)
@@ -104,6 +107,8 @@ export type {
   RuleTriggeredEvent,
   OutputDiffEvent,
   RawCaptureEvent,
+  ToolPolicyAuditEvent,
+  WriteFailedAuditEvent,
 } from "./types/audit.js";
 
 export {
@@ -127,6 +132,15 @@ export {
   DEFAULT_ALERT_RULES,
   DEFAULT_ALERT_CONFIG,
 } from "./types/alerting.js";
+
+/** Guard types (v1.3) */
+export type {
+  ToolCallInput,
+  ToolCallGuardConfig,
+  ClawMoatPolicyEngine,
+  ToolPolicyResult,
+  ToolCallGuardResult,
+} from "./guard/types.js";
 
 /** Pipeline types */
 export type {

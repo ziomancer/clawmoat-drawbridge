@@ -26,7 +26,8 @@ export type AlertRuleId =
   | "frequencyEscalationTier3"
   | "scanBlockAfterSyntacticPass"
   | "writeFailSpike"
-  | "trustedToolSchemaFail";
+  | "trustedToolSchemaFail"
+  | "toolPolicyBlock";
 
 /** Alert payload delivered to consumers */
 export interface AlertPayload {
@@ -96,6 +97,13 @@ export interface AlertRuleConfigs {
   trustedToolSchemaFail?: {
     enabled: boolean;
   };
+  toolPolicyBlock?: {
+    enabled: boolean;
+    /** Minimum blocks to trigger. Default: 1 */
+    count: number;
+    /** Time window in minutes. Default: 10 */
+    windowMinutes: number;
+  };
 }
 
 /** Alert manager configuration */
@@ -153,6 +161,11 @@ export const DEFAULT_ALERT_RULES: AlertRuleConfigs = deepFreeze({
   },
   trustedToolSchemaFail: {
     enabled: true,
+  },
+  toolPolicyBlock: {
+    enabled: true,
+    count: 1,
+    windowMinutes: 10,
   },
 });
 

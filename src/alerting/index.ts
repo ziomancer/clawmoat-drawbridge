@@ -73,6 +73,10 @@ export class AlertManager {
             ?? DEFAULT_ALERT_RULES.trustedToolSchemaFail?.enabled
             ?? true,
         },
+        toolPolicyBlock: {
+          ...DEFAULT_ALERT_RULES.toolPolicyBlock!,
+          ...config?.rules?.toolPolicyBlock,
+        },
       },
       rateLimit: {
         ...DEFAULT_ALERT_CONFIG.rateLimit,
@@ -156,7 +160,13 @@ export class AlertManager {
           alert = this.evaluateTrustedToolSchemaFail(event);
           break;
 
-        // write_failed not yet a Drawbridge audit event — writeFailSpike deferred
+        case "write_failed":
+          alert = this.evaluateWriteFailSpike(event);
+          break;
+
+        case "tool_policy_block":
+          alert = this.evaluateToolPolicyBlock(event);
+          break;
       }
 
       // 3. Apply dedup and rate limiting
@@ -343,6 +353,56 @@ export class AlertManager {
       summary: `Trusted tool ${schemaEvent.serverName}:${schemaEvent.toolName} produced structurally invalid output`,
       triggeringEvents: [event],
       ruleConfig: { enabled: rule.enabled },
+    });
+  }
+
+  /** Rule 5: Write fail spike (cross-session aggregation) */
+  private evaluateWriteFailSpike(
+    event: TypedAuditEvent,
+  ): AlertPayload | null {
+    const rule = this.config.rules.writeFailSpike;
+    if (!rule.enabled) return null;
+
+    const windowMs = rule.windowMinutes * 60_000;
+    const now = Date.now();
+    const entries = this.eventIndex.get("write_failed") ?? [];
+    const recentCount = entries.filter((e) => now - e.timestamp < windowMs).length;
+
+    if (recentCount < rule.count) return null;
+
+    return this.buildAlert({
+      ruleId: "writeFailSpike",
+      severity: "medium",
+      sessionId: event.sessionId,
+      agentId: event.agentId,
+      summary: `${recentCount} write failures in ${rule.windowMinutes} minutes`,
+      triggeringEvents: [event],
+      ruleConfig: { count: rule.count, windowMinutes: rule.windowMinutes },
+    });
+  }
+
+  /** Rule 6: Tool policy block */
+  private evaluateToolPolicyBlock(
+    event: TypedAuditEvent,
+  ): AlertPayload | null {
+    const rule = this.config.rules.toolPolicyBlock;
+    if (!rule?.enabled) return null;
+
+    const windowMs = rule.windowMinutes * 60_000;
+    const now = Date.now();
+    const entries = this.eventIndex.get("tool_policy_block") ?? [];
+    const recentCount = entries.filter((e) => now - e.timestamp < windowMs).length;
+
+    if (recentCount < rule.count) return null;
+
+    return this.buildAlert({
+      ruleId: "toolPolicyBlock",
+      severity: "high",
+      sessionId: event.sessionId,
+      agentId: event.agentId,
+      summary: `Tool call blocked by policy guard (${recentCount} in ${rule.windowMinutes} minutes)`,
+      triggeringEvents: [event],
+      ruleConfig: { count: rule.count, windowMinutes: rule.windowMinutes },
     });
   }
 
