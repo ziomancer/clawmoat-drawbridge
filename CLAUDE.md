@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Drawbridge is a session-aware content sanitization pipeline for AI agents. It wraps ClawMoat (prompt injection + PII scanner) with syntactic pre-filtering, exponential-decay frequency tracking, escalation tiers, content redaction, context-aware profiles, audit trails, and alerting. Published on npm as `@vigil-harbor/clawmoat-drawbridge` (v1.2.0). An OpenClaw plugin is available at `extensions/drawbridge/`.
+Drawbridge is a session-aware content sanitization pipeline for AI agents. It wraps ClawMoat (prompt injection + PII scanner) with syntactic pre-filtering, exponential-decay frequency tracking, escalation tiers, content redaction, context-aware profiles, audit trails, and alerting. Published on npm as `@vigil-harbor/clawmoat-drawbridge` (v1.3.0). An OpenClaw plugin is available at `extensions/drawbridge/`.
 
 ## Build & Run
 
@@ -66,7 +66,7 @@ Per-session exponential decay scoring (half-life 60s) + rolling window counters:
 - **ClawMoat is an optional peer dep** — fail-open if missing; syntactic pre-filter still runs
 - **Pipeline never throws** — all errors caught and returned in PipelineResult
 - **Frozen exports** — built-in profiles, syntactic rules, and default configs are deepFrozen
-- **602+ tests** — core library (424) + plugin (178). Run both before publishing.
+- **661 tests** — core library (460) + plugin (201). Run both before publishing.
 - **HMAC-SHA256 for redaction hashing** — opt-in via `hashRedactions: true`
 
 ## Wiki

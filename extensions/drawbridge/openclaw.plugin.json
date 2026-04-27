@@ -91,7 +91,7 @@
         "type": "array",
         "items": { "type": "string" },
         "default": ["read"],
-        "description": "Tool allowlist for tier2+ escalated sessions"
+        "description": "Tool allowlist for tier2 escalated sessions (tier3 blocks all tools unconditionally)"
       },
       "toolPolicies": {
         "type": "object",
