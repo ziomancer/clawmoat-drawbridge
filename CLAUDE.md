@@ -71,15 +71,10 @@ Per-session exponential decay scoring (half-life 60s) + rolling window counters:
 
 ## Wiki
 
-The Vigil Harbor wiki lives at `C:\Users\zioni\Documents\Vigil-Harbor\vigil-harbor-wiki`.
-Read `SCHEMA.md` for conventions and maintenance rules.
+Vigil Harbor's internal documentation lives at
+`C:\Users\zioni\Documents\Vigil-Harbor\vigil-harbor-wiki`. Drawbridge's
+pages are under `projects/drawbridge/`.
 
-Before starting implementation:
-1. Read `index.md` to orient.
-2. Read `projects/drawbridge/architecture.md` and `projects/drawbridge/state.md`.
-3. Read `projects/drawbridge/filemap.md` before modifying files.
-
-After completing work:
-1. Update filemap and state for Drawbridge.
-2. Create a `decisions/` entry for any non-obvious judgment calls.
-3. Append to `log.md`.
+After merging code in this repo, run `/wiki-after-merge <commit-sha>`
+from the wiki directory to update the wiki's log / filemap / state pages.
+See `SCHEMA.md` in the wiki for full maintenance conventions.
